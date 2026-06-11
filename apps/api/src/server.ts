@@ -15,7 +15,11 @@ export async function buildServer(overrides: Partial<AppContext> = {}) {
   };
 
   const app = Fastify({ logger: true });
-  await app.register(cors, { origin: true });
+  await app.register(cors, {
+    origin: true,
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['content-type', 'x-telegram-init-data', 'x-dev-telegram-id', 'x-dev-first-name', 'x-dev-username']
+  });
   await registerAuth(app, context);
 
   app.get('/api/health', async () => ({ ok: true }));

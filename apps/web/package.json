@@ -7,7 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -p tsconfig.json && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "echo \"No frontend automated tests yet\""
+    "test": "vitest run"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.1.1",
@@ -18,7 +18,7 @@
   },
   "devDependencies": {
     "@types/react": "^19.2.7",
-    "@types/react-dom": "^19.2.3"
+    "@types/react-dom": "^19.2.3",
+    "vitest": "^3.2.3"
   }
 }
-
