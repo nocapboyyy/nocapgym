@@ -31,6 +31,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background: var(--ink);
+  overflow-x: hidden;
 }
 
 body::before {
@@ -236,6 +237,13 @@ h3 {
   background: var(--powder-blush);
 }
 
+.create-plan-button {
+  width: 100%;
+  min-height: 54px;
+  justify-content: center;
+  font-size: 16px;
+}
+
 .dashboard-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -269,6 +277,7 @@ h3 {
 .stack {
   display: grid;
   gap: 12px;
+  min-width: 0;
 }
 
 .panel,
@@ -282,11 +291,13 @@ h3 {
 .panel {
   display: grid;
   gap: 11px;
+  min-width: 0;
 }
 
 .card {
   display: grid;
   gap: 12px;
+  min-width: 0;
   background: var(--panel-2);
 }
 
@@ -310,6 +321,7 @@ h3 {
   flex-wrap: wrap;
   justify-content: flex-start;
   gap: 10px;
+  min-width: 0;
 }
 
 .secondary {
@@ -358,10 +370,15 @@ h3 {
 .exercise-block {
   display: grid;
   gap: 12px;
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 11px;
   background: #171516;
+}
+
+.row > :not(.icon-button) {
+  min-width: 0;
 }
 
 .set-row {
@@ -413,6 +430,115 @@ h3 {
 .edit-grid {
   display: grid;
   gap: 8px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 14px;
+  background: rgba(7, 6, 7, 0.72);
+}
+
+.plan-dialog {
+  width: min(720px, 100%);
+  max-height: min(760px, calc(100vh - 28px));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--panel);
+  display: grid;
+  gap: 12px;
+  overflow: hidden;
+  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.54);
+}
+
+.dialog-header {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  gap: 8px;
+  align-items: center;
+}
+
+.dialog-header h2 {
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dialog-spacer {
+  width: 44px;
+  height: 44px;
+}
+
+.dialog-body,
+.exercise-picker-list,
+.plan-exercise-summary {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dialog-body,
+.exercise-picker-list {
+  overflow: auto;
+  padding-right: 1px;
+}
+
+.exercise-picker-row {
+  width: 100%;
+  min-height: 64px;
+  padding: 12px;
+  color: var(--text);
+  background: var(--panel-2);
+  box-shadow: none;
+  text-align: left;
+  justify-content: flex-start;
+}
+
+.exercise-picker-row span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.exercise-picker-row strong,
+.exercise-picker-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exercise-picker-row small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.exercise-summary-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: #171516;
+}
+
+.exercise-summary-card > div {
+  min-width: 0;
+}
+
+.exercise-summary-card h3 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .compact-list span,
@@ -493,5 +619,42 @@ h3 {
   .actions .file-button,
   .finish-panel button {
     width: 100%;
+  }
+
+  .actions {
+    width: 100%;
+  }
+
+  .modal-backdrop {
+    padding: 8px;
+  }
+
+  .plan-dialog {
+    max-height: calc(100vh - 16px);
+  }
+}
+
+@media (max-width: 360px) {
+  .app-shell {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
+  .panel,
+  .card {
+    padding: 12px;
+  }
+
+  .exercise-block {
+    padding: 10px;
+  }
+
+  .set-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
+    gap: 8px;
+  }
+
+  .set-row > select {
+    grid-column: 1 / -1;
   }
 }

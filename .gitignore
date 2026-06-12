@@ -1,9 +1,9 @@
 node_modules
 dist
 coverage
+.superpowers/
 .env
 .env.local
 *.db
 *.db-journal
 apps/api/prisma/dev.db
-

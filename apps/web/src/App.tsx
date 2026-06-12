@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
+  ArrowLeft,
   BarChart3,
   Check,
   Dumbbell,
@@ -10,7 +11,8 @@ import {
   Plus,
   Save,
   Shield,
-  Trash2
+  Trash2,
+  X
 } from 'lucide-react';
 import { api } from './api';
 import { initTelegramApp } from './telegram';
@@ -310,156 +312,111 @@ function TemplatePanel(props: {
   setDraft: (draft: Partial<WorkoutTemplate> & { exercises: TemplateExercise[] }) => void;
   onEdit: (template: WorkoutTemplate) => void;
   onDelete: (id: string) => void;
-  onSave: () => void;
+  onSave: () => void | Promise<void>;
   onStart: (id: string) => void;
   onCancelEdit: () => void;
 }) {
-  const firstExerciseId = props.exercises[0]?.id ?? '';
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [dialogStep, setDialogStep] = useState<'form' | 'exercise-list' | 'exercise-detail'>('form');
+  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+  const [exerciseDraft, setExerciseDraft] = useState<TemplateExercise | null>(null);
 
-  function updateExercise(index: number, patch: Partial<TemplateExercise>) {
-    props.setDraft({
-      ...props.draft,
-      exercises: props.draft.exercises.map((item, itemIndex) =>
-        itemIndex === index ? { ...item, ...patch } : item
-      )
-    });
+  useEffect(() => {
+    if (props.editingTemplateId) {
+      setIsDialogOpen(true);
+      setDialogStep('form');
+    }
+  }, [props.editingTemplateId]);
+
+  function openNewTemplate() {
+    props.onCancelEdit();
+    setSelectedExercise(null);
+    setExerciseDraft(null);
+    setDialogStep('form');
+    setIsDialogOpen(true);
   }
 
-  function updateSet(exerciseIndex: number, setIndex: number, patch: Partial<TemplateSet>) {
-    updateExercise(exerciseIndex, {
-      sets: props.draft.exercises[exerciseIndex].sets.map((set, currentIndex) =>
+  function closeDialog() {
+    setIsDialogOpen(false);
+    setDialogStep('form');
+    setSelectedExercise(null);
+    setExerciseDraft(null);
+    props.onCancelEdit();
+  }
+
+  function openExerciseDetail(exercise: Exercise) {
+    setSelectedExercise(exercise);
+    setExerciseDraft({
+      exerciseId: exercise.id,
+      order: props.draft.exercises.length,
+      sets: [{ type: 'working', targetWeightKg: 0, targetReps: 8, order: 0 }]
+    });
+    setDialogStep('exercise-detail');
+  }
+
+  function updateExerciseSet(setIndex: number, patch: Partial<TemplateSet>) {
+    if (!exerciseDraft) return;
+    setExerciseDraft({
+      ...exerciseDraft,
+      sets: exerciseDraft.sets.map((set, currentIndex) =>
         currentIndex === setIndex ? { ...set, ...patch } : set
       )
     });
   }
 
+  function saveExerciseToPlan() {
+    if (!exerciseDraft) return;
+    props.setDraft({
+      ...props.draft,
+      exercises: [
+        ...props.draft.exercises,
+        {
+          ...exerciseDraft,
+          order: props.draft.exercises.length,
+          sets: exerciseDraft.sets.map((set, order) => ({ ...set, order }))
+        }
+      ]
+    });
+    setSelectedExercise(null);
+    setExerciseDraft(null);
+    setDialogStep('form');
+  }
+
+  function removeExerciseFromPlan(index: number) {
+    props.setDraft({
+      ...props.draft,
+      exercises: props.draft.exercises
+        .filter((_, currentIndex) => currentIndex !== index)
+        .map((exercise, order) => ({ ...exercise, order }))
+    });
+  }
+
+  async function savePlan() {
+    if (!props.draft.name?.trim() || props.draft.exercises.length === 0) {
+      await props.onSave();
+      return;
+    }
+    await props.onSave();
+    setIsDialogOpen(false);
+    setDialogStep('form');
+    setSelectedExercise(null);
+    setExerciseDraft(null);
+  }
+
+  const dialogTitle =
+    dialogStep === 'exercise-list'
+      ? 'Выберите упражнение'
+      : dialogStep === 'exercise-detail'
+        ? selectedExercise?.name ?? 'Упражнение'
+        : props.editingTemplateId
+          ? 'Редактировать план'
+          : 'Новый план';
+
   return (
     <section className="stack">
-      <section className="panel">
-        <div className="panel-title">
-          <h2>{props.editingTemplateId ? 'Редактировать план' : 'Новый план'}</h2>
-          {props.editingTemplateId && <button onClick={props.onCancelEdit}>Отмена</button>}
-        </div>
-        <input
-          placeholder="Название тренировки"
-          value={props.draft.name ?? ''}
-          onChange={(event) => props.setDraft({ ...props.draft, name: event.target.value })}
-        />
-        <textarea
-          placeholder="Заметки"
-          value={props.draft.notes ?? ''}
-          onChange={(event) => props.setDraft({ ...props.draft, notes: event.target.value })}
-        />
-
-        {props.draft.exercises.map((exercise, exerciseIndex) => (
-          <div className="exercise-block" key={`${exercise.exerciseId}-${exerciseIndex}`}>
-            <div className="row">
-              <select value={exercise.exerciseId} onChange={(event) => updateExercise(exerciseIndex, { exerciseId: event.target.value })}>
-                {props.exercises.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                className="icon-button"
-                aria-label="Удалить упражнение"
-                onClick={() =>
-                  props.setDraft({
-                    ...props.draft,
-                    exercises: props.draft.exercises.filter((_, index) => index !== exerciseIndex)
-                  })
-                }
-              >
-                <Trash2 size={18} />
-              </button>
-            </div>
-            {exercise.sets.map((set, setIndex) => (
-              <div className="set-row" key={setIndex}>
-                <select value={set.type} onChange={(event) => updateSet(exerciseIndex, setIndex, { type: event.target.value as TemplateSet['type'] })}>
-                  <option value="warmup">Разм.</option>
-                  <option value="working">Раб.</option>
-                </select>
-                <label className="unit-field">
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    step="0.5"
-                    placeholder="0 кг"
-                    value={numberInputValue(set.targetWeightKg)}
-                    onChange={(event) =>
-                      updateSet(exerciseIndex, setIndex, { targetWeightKg: parseNumberInput(event.target.value) })
-                    }
-                  />
-                  <span>кг</span>
-                </label>
-                <label className="unit-field">
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    step="1"
-                    placeholder="0 п."
-                    value={numberInputValue(set.targetReps)}
-                    onChange={(event) =>
-                      updateSet(exerciseIndex, setIndex, { targetReps: parseNumberInput(event.target.value) })
-                    }
-                  />
-                  <span>п.</span>
-                </label>
-                <button
-                  className="icon-button"
-                  aria-label="Удалить подход"
-                  onClick={() =>
-                    updateExercise(exerciseIndex, {
-                      sets: exercise.sets.filter((_, index) => index !== setIndex).map((item, order) => ({ ...item, order }))
-                    })
-                  }
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
-            <button
-              className="secondary"
-              onClick={() =>
-                updateExercise(exerciseIndex, {
-                  sets: [
-                    ...exercise.sets,
-                    { type: 'working', targetWeightKg: 0, targetReps: 8, order: exercise.sets.length }
-                  ]
-                })
-              }
-            >
-              <Plus size={16} /> Подход
-            </button>
-          </div>
-        ))}
-
-        <div className="actions">
-          <button
-            className="secondary"
-            disabled={!firstExerciseId}
-            onClick={() =>
-              props.setDraft({
-                ...props.draft,
-                exercises: [
-                  ...props.draft.exercises,
-                  {
-                    exerciseId: firstExerciseId,
-                    order: props.draft.exercises.length,
-                    sets: [{ type: 'working', targetWeightKg: 0, targetReps: 8, order: 0 }]
-                  }
-                ]
-              })
-            }
-          >
-            <ListPlus size={18} /> Упражнение
-          </button>
-          <button onClick={props.onSave}>
-            <Save size={18} /> Сохранить
-          </button>
-        </div>
-      </section>
+      <button className="create-plan-button" onClick={openNewTemplate}>
+        <Plus size={20} /> Новый план
+      </button>
 
       <section className="stack">
         <h2>Мои планы</h2>
@@ -491,6 +448,155 @@ function TemplatePanel(props: {
           </article>
         ))}
       </section>
+
+      {isDialogOpen && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="plan-dialog" role="dialog" aria-modal="true" aria-labelledby="plan-dialog-title">
+            <div className="dialog-header">
+              {dialogStep === 'form' ? (
+                <span className="dialog-spacer" aria-hidden="true" />
+              ) : (
+                <button className="icon-button" aria-label="Назад" onClick={() => setDialogStep(dialogStep === 'exercise-detail' ? 'exercise-list' : 'form')}>
+                  <ArrowLeft size={18} />
+                </button>
+              )}
+              <h2 id="plan-dialog-title">{dialogTitle}</h2>
+              <button className="icon-button" aria-label="Закрыть" onClick={closeDialog}>
+                <X size={18} />
+              </button>
+            </div>
+
+            {dialogStep === 'form' && (
+              <div className="dialog-body">
+                <input
+                  placeholder="Название тренировки"
+                  value={props.draft.name ?? ''}
+                  onChange={(event) => props.setDraft({ ...props.draft, name: event.target.value })}
+                />
+                <textarea
+                  placeholder="Заметки"
+                  value={props.draft.notes ?? ''}
+                  onChange={(event) => props.setDraft({ ...props.draft, notes: event.target.value })}
+                />
+
+                <div className="plan-exercise-summary">
+                  {props.draft.exercises.length === 0 ? (
+                    <p className="empty">Добавьте упражнения из каталога.</p>
+                  ) : (
+                    props.draft.exercises.map((exercise, exerciseIndex) => {
+                      const catalogExercise = props.exercises.find((item) => item.id === exercise.exerciseId);
+                      return (
+                        <article className="exercise-summary-card" key={`${exercise.exerciseId}-${exerciseIndex}`}>
+                          <div>
+                            <h3>{catalogExercise?.name ?? 'Упражнение'}</h3>
+                            <span className="muted">{exercise.sets.length} подходов</span>
+                          </div>
+                          <button className="icon-button" aria-label="Удалить упражнение" onClick={() => removeExerciseFromPlan(exerciseIndex)}>
+                            <Trash2 size={17} />
+                          </button>
+                        </article>
+                      );
+                    })
+                  )}
+                </div>
+
+                <div className="actions">
+                  <button className="secondary" disabled={props.exercises.length === 0} onClick={() => setDialogStep('exercise-list')}>
+                    <ListPlus size={18} /> Упражнение
+                  </button>
+                  <button onClick={savePlan}>
+                    <Save size={18} /> Сохранить
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {dialogStep === 'exercise-list' && (
+              <div className="exercise-picker-list">
+                {props.exercises.map((exercise) => (
+                  <button className="exercise-picker-row" key={exercise.id} onClick={() => openExerciseDetail(exercise)}>
+                    <span>
+                      <strong>{exercise.name}</strong>
+                      <small>
+                        {exercise.muscleGroup} · {exercise.equipment}
+                      </small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {dialogStep === 'exercise-detail' && exerciseDraft && (
+              <div className="dialog-body">
+                {selectedExercise?.techniqueNote && <p className="muted">{selectedExercise.techniqueNote}</p>}
+
+                <div className="exercise-block">
+                  {exerciseDraft.sets.map((set, setIndex) => (
+                    <div className="set-row" key={setIndex}>
+                      <select value={set.type} onChange={(event) => updateExerciseSet(setIndex, { type: event.target.value as TemplateSet['type'] })}>
+                        <option value="warmup">Разм.</option>
+                        <option value="working">Раб.</option>
+                      </select>
+                      <label className="unit-field">
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          step="0.5"
+                          placeholder="0 кг"
+                          value={numberInputValue(set.targetWeightKg)}
+                          onChange={(event) => updateExerciseSet(setIndex, { targetWeightKg: parseNumberInput(event.target.value) })}
+                        />
+                        <span>кг</span>
+                      </label>
+                      <label className="unit-field">
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          step="1"
+                          placeholder="0 п."
+                          value={numberInputValue(set.targetReps)}
+                          onChange={(event) => updateExerciseSet(setIndex, { targetReps: parseNumberInput(event.target.value) })}
+                        />
+                        <span>п.</span>
+                      </label>
+                      <button
+                        className="icon-button"
+                        aria-label="Удалить подход"
+                        onClick={() =>
+                          setExerciseDraft({
+                            ...exerciseDraft,
+                            sets: exerciseDraft.sets.filter((_, index) => index !== setIndex).map((item, order) => ({ ...item, order }))
+                          })
+                        }
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    className="secondary"
+                    onClick={() =>
+                      setExerciseDraft({
+                        ...exerciseDraft,
+                        sets: [
+                          ...exerciseDraft.sets,
+                          { type: 'working', targetWeightKg: 0, targetReps: 8, order: exerciseDraft.sets.length }
+                        ]
+                      })
+                    }
+                  >
+                    <Plus size={16} /> Подход
+                  </button>
+                </div>
+
+                <button disabled={exerciseDraft.sets.length === 0} onClick={saveExerciseToPlan}>
+                  <Save size={18} /> Сохранить упражнение
+                </button>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
     </section>
   );
 }
