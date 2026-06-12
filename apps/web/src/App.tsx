@@ -66,6 +66,36 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    const root = document.documentElement;
+
+    function updateViewportVars() {
+      const viewport = window.visualViewport;
+      const viewportHeight = viewport?.height ?? window.innerHeight;
+      const keyboardOffset = viewport ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0;
+      const keyboardSpace = Math.min(keyboardOffset, 220);
+      root.style.setProperty('--app-viewport-height', `${viewportHeight}px`);
+      root.style.setProperty('--keyboard-offset', `${keyboardOffset}px`);
+      root.style.setProperty('--keyboard-space', `${keyboardSpace}px`);
+      root.style.setProperty('--keyboard-lift', `${-Math.min(keyboardOffset * 0.58, 220)}px`);
+    }
+
+    updateViewportVars();
+    window.visualViewport?.addEventListener('resize', updateViewportVars);
+    window.visualViewport?.addEventListener('scroll', updateViewportVars);
+    window.addEventListener('resize', updateViewportVars);
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', updateViewportVars);
+      window.visualViewport?.removeEventListener('scroll', updateViewportVars);
+      window.removeEventListener('resize', updateViewportVars);
+      root.style.removeProperty('--app-viewport-height');
+      root.style.removeProperty('--keyboard-offset');
+      root.style.removeProperty('--keyboard-space');
+      root.style.removeProperty('--keyboard-lift');
+    };
+  }, []);
+
+  useEffect(() => {
     if (!message) return;
     const timeout = window.setTimeout(() => setMessage(''), 3200);
     return () => window.clearTimeout(timeout);
