@@ -34,6 +34,14 @@ const emptyTemplate = (): Partial<WorkoutTemplate> & { exercises: TemplateExerci
   exercises: []
 });
 
+function numberInputValue(value: number | null | undefined) {
+  return value === null || value === undefined || value === 0 ? '' : String(value);
+}
+
+function parseNumberInput(value: string) {
+  return value === '' ? 0 : Number(value);
+}
+
 export function App() {
   const [tab, setTab] = useState<Tab>('templates');
   const [user, setUser] = useState<User | null>(null);
@@ -54,6 +62,12 @@ export function App() {
     initTelegramApp();
     void loadInitialData();
   }, []);
+
+  useEffect(() => {
+    if (!message) return;
+    const timeout = window.setTimeout(() => setMessage(''), 3200);
+    return () => window.clearTimeout(timeout);
+  }, [message]);
 
   async function loadInitialData() {
     setLoading(true);
@@ -168,6 +182,9 @@ export function App() {
     ],
     [isAdmin]
   );
+  const completedSessionsCount = history.length;
+  const plannedExercisesCount = templates.reduce((total, template) => total + template.exercises.length, 0);
+  const activeSetsCount = activeSession?.exercises.reduce((total, exercise) => total + exercise.sets.length, 0) ?? 0;
 
   if (loading) {
     return <main className="app-shell centered">Загрузка...</main>;
@@ -177,8 +194,8 @@ export function App() {
     <main className="app-shell">
       <header className="topbar">
         <div>
-          <span className="muted">Telegram Mini App</span>
-          <h1>Тренировки</h1>
+          <span className="eyebrow">NOCAPGYM</span>
+          <h1>{tab === 'session' ? 'Зал' : tab === 'history' ? 'Прогресс' : tab === 'admin' ? 'Админка' : 'Тренировки'}</h1>
         </div>
         <div className="profile">{user?.firstName ?? user?.username ?? 'Пользователь'}</div>
       </header>
@@ -197,6 +214,25 @@ export function App() {
           </button>
         ))}
       </nav>
+
+      <section className="dashboard-strip" aria-label="Сводка">
+        <div>
+          <span className="metric-label">Планы</span>
+          <strong>{templates.length}</strong>
+        </div>
+        <div>
+          <span className="metric-label">В плане</span>
+          <strong>{plannedExercisesCount}</strong>
+        </div>
+        <div>
+          <span className="metric-label">История</span>
+          <strong>{completedSessionsCount}</strong>
+        </div>
+        <div>
+          <span className="metric-label">Сейчас</span>
+          <strong>{activeSetsCount}</strong>
+        </div>
+      </section>
 
       {tab === 'templates' && (
         <TemplatePanel
@@ -344,18 +380,32 @@ function TemplatePanel(props: {
                   <option value="warmup">Разм.</option>
                   <option value="working">Раб.</option>
                 </select>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={set.targetWeightKg}
-                  onChange={(event) => updateSet(exerciseIndex, setIndex, { targetWeightKg: Number(event.target.value) })}
-                />
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={set.targetReps}
-                  onChange={(event) => updateSet(exerciseIndex, setIndex, { targetReps: Number(event.target.value) })}
-                />
+                <label className="unit-field">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.5"
+                    placeholder="0 кг"
+                    value={numberInputValue(set.targetWeightKg)}
+                    onChange={(event) =>
+                      updateSet(exerciseIndex, setIndex, { targetWeightKg: parseNumberInput(event.target.value) })
+                    }
+                  />
+                  <span>кг</span>
+                </label>
+                <label className="unit-field">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    step="1"
+                    placeholder="0 п."
+                    value={numberInputValue(set.targetReps)}
+                    onChange={(event) =>
+                      updateSet(exerciseIndex, setIndex, { targetReps: parseNumberInput(event.target.value) })
+                    }
+                  />
+                  <span>п.</span>
+                </label>
                 <button
                   className="icon-button"
                   aria-label="Удалить подход"
@@ -509,18 +559,32 @@ function SessionPanel(props: {
                 <option value="warmup">Разм.</option>
                 <option value="working">Раб.</option>
               </select>
-              <input
-                type="number"
-                inputMode="decimal"
-                value={set.actualWeightKg ?? 0}
-                onChange={(event) => updateSet(exerciseIndex, setIndex, { actualWeightKg: Number(event.target.value) })}
-              />
-              <input
-                type="number"
-                inputMode="numeric"
-                value={set.actualReps ?? 0}
-                onChange={(event) => updateSet(exerciseIndex, setIndex, { actualReps: Number(event.target.value) })}
-              />
+              <label className="unit-field">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.5"
+                  placeholder="0 кг"
+                  value={numberInputValue(set.actualWeightKg)}
+                  onChange={(event) =>
+                    updateSet(exerciseIndex, setIndex, { actualWeightKg: parseNumberInput(event.target.value) })
+                  }
+                />
+                <span>кг</span>
+              </label>
+              <label className="unit-field">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  step="1"
+                  placeholder="0 п."
+                  value={numberInputValue(set.actualReps)}
+                  onChange={(event) =>
+                    updateSet(exerciseIndex, setIndex, { actualReps: parseNumberInput(event.target.value) })
+                  }
+                />
+                <span>п.</span>
+              </label>
               <button
                 className={set.completed ? 'icon-button done' : 'icon-button'}
                 aria-label="Отметить подход"
