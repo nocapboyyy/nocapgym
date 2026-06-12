@@ -117,7 +117,7 @@ select {
 
 textarea {
   min-height: 82px;
-  resize: vertical;
+  resize: none;
 }
 
 h1,
@@ -439,7 +439,7 @@ h3 {
   inset: 0 0 auto;
   z-index: 20;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
   height: var(--app-viewport-height, 100dvh);
   padding: 14px 14px max(14px, env(safe-area-inset-bottom, 0px));
@@ -449,19 +449,20 @@ h3 {
 
 .plan-dialog {
   width: min(720px, 100%);
-  max-height: min(760px, calc(var(--app-viewport-height, 100dvh) - 28px - var(--keyboard-space, 0px)));
+  height: min(720px, calc(var(--app-viewport-height, 100dvh) - 28px));
+  max-height: calc(var(--app-viewport-height, 100dvh) - 28px);
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 12px;
   background: var(--panel);
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
   overflow: hidden;
   box-shadow: 0 24px 72px rgba(0, 0, 0, 0.54);
-  transform: translateY(var(--keyboard-lift, 0px));
   transition:
-    max-height 220ms ease,
-    transform 220ms ease;
+    height 220ms ease,
+    max-height 220ms ease;
 }
 
 .dialog-header {
@@ -488,13 +489,75 @@ h3 {
 .plan-exercise-summary {
   display: grid;
   gap: 10px;
+  align-content: start;
   min-width: 0;
+  min-height: 0;
 }
 
 .dialog-body,
 .exercise-picker-list {
-  overflow: auto;
-  padding-right: 1px;
+  grid-auto-rows: max-content;
+  overflow: hidden;
+}
+
+.plan-form-body {
+  align-content: stretch;
+  grid-auto-rows: auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.plan-form-fields {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.plan-exercise-summary,
+.exercise-picker-list {
+  align-content: start;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.dialog-actions {
+  align-self: end;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+}
+
+.dialog-actions button,
+.dialog-body > button,
+.exercise-detail-actions button {
+  width: 100%;
+  min-height: 54px;
+}
+
+.exercise-detail-body {
+  align-content: stretch;
+  grid-auto-rows: auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.exercise-sets-panel {
+  grid-template-rows: minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.exercise-sets-list {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.exercise-detail-actions {
+  align-self: end;
 }
 
 .exercise-picker-row {
@@ -629,6 +692,11 @@ h3 {
     width: 100%;
   }
 
+  .dialog-actions button,
+  .dialog-body > button {
+    width: 100%;
+  }
+
   .actions {
     width: 100%;
   }
@@ -638,7 +706,8 @@ h3 {
   }
 
   .plan-dialog {
-    max-height: calc(var(--app-viewport-height, 100dvh) - 16px - var(--keyboard-space, 0px));
+    height: calc(var(--app-viewport-height, 100dvh) - 16px);
+    max-height: calc(var(--app-viewport-height, 100dvh) - 16px);
   }
 }
 

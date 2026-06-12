@@ -497,17 +497,19 @@ function TemplatePanel(props: {
             </div>
 
             {dialogStep === 'form' && (
-              <div className="dialog-body">
-                <input
-                  placeholder="Название тренировки"
-                  value={props.draft.name ?? ''}
-                  onChange={(event) => props.setDraft({ ...props.draft, name: event.target.value })}
-                />
-                <textarea
-                  placeholder="Заметки"
-                  value={props.draft.notes ?? ''}
-                  onChange={(event) => props.setDraft({ ...props.draft, notes: event.target.value })}
-                />
+              <div className="dialog-body plan-form-body">
+                <div className="plan-form-fields">
+                  <input
+                    placeholder="Название тренировки"
+                    value={props.draft.name ?? ''}
+                    onChange={(event) => props.setDraft({ ...props.draft, name: event.target.value })}
+                  />
+                  <textarea
+                    placeholder="Заметки"
+                    value={props.draft.notes ?? ''}
+                    onChange={(event) => props.setDraft({ ...props.draft, notes: event.target.value })}
+                  />
+                </div>
 
                 <div className="plan-exercise-summary">
                   {props.draft.exercises.length === 0 ? (
@@ -530,7 +532,7 @@ function TemplatePanel(props: {
                   )}
                 </div>
 
-                <div className="actions">
+                <div className="actions dialog-actions">
                   <button className="secondary" disabled={props.exercises.length === 0} onClick={() => setDialogStep('exercise-list')}>
                     <ListPlus size={18} /> Упражнение
                   </button>
@@ -557,52 +559,54 @@ function TemplatePanel(props: {
             )}
 
             {dialogStep === 'exercise-detail' && exerciseDraft && (
-              <div className="dialog-body">
+              <div className="dialog-body exercise-detail-body">
                 {selectedExercise?.techniqueNote && <p className="muted">{selectedExercise.techniqueNote}</p>}
 
-                <div className="exercise-block">
-                  {exerciseDraft.sets.map((set, setIndex) => (
-                    <div className="set-row" key={setIndex}>
-                      <select value={set.type} onChange={(event) => updateExerciseSet(setIndex, { type: event.target.value as TemplateSet['type'] })}>
-                        <option value="warmup">Разм.</option>
-                        <option value="working">Раб.</option>
-                      </select>
-                      <label className="unit-field">
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          step="0.5"
-                          placeholder="0 кг"
-                          value={numberInputValue(set.targetWeightKg)}
-                          onChange={(event) => updateExerciseSet(setIndex, { targetWeightKg: parseNumberInput(event.target.value) })}
-                        />
-                        <span>кг</span>
-                      </label>
-                      <label className="unit-field">
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          step="1"
-                          placeholder="0 п."
-                          value={numberInputValue(set.targetReps)}
-                          onChange={(event) => updateExerciseSet(setIndex, { targetReps: parseNumberInput(event.target.value) })}
-                        />
-                        <span>п.</span>
-                      </label>
-                      <button
-                        className="icon-button"
-                        aria-label="Удалить подход"
-                        onClick={() =>
-                          setExerciseDraft({
-                            ...exerciseDraft,
-                            sets: exerciseDraft.sets.filter((_, index) => index !== setIndex).map((item, order) => ({ ...item, order }))
-                          })
-                        }
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  ))}
+                <div className="exercise-block exercise-sets-panel">
+                  <div className="exercise-sets-list">
+                    {exerciseDraft.sets.map((set, setIndex) => (
+                      <div className="set-row" key={setIndex}>
+                        <select value={set.type} onChange={(event) => updateExerciseSet(setIndex, { type: event.target.value as TemplateSet['type'] })}>
+                          <option value="warmup">Разм.</option>
+                          <option value="working">Раб.</option>
+                        </select>
+                        <label className="unit-field">
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            step="0.5"
+                            placeholder="0 кг"
+                            value={numberInputValue(set.targetWeightKg)}
+                            onChange={(event) => updateExerciseSet(setIndex, { targetWeightKg: parseNumberInput(event.target.value) })}
+                          />
+                          <span>кг</span>
+                        </label>
+                        <label className="unit-field">
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            step="1"
+                            placeholder="0 п."
+                            value={numberInputValue(set.targetReps)}
+                            onChange={(event) => updateExerciseSet(setIndex, { targetReps: parseNumberInput(event.target.value) })}
+                          />
+                          <span>п.</span>
+                        </label>
+                        <button
+                          className="icon-button"
+                          aria-label="Удалить подход"
+                          onClick={() =>
+                            setExerciseDraft({
+                              ...exerciseDraft,
+                              sets: exerciseDraft.sets.filter((_, index) => index !== setIndex).map((item, order) => ({ ...item, order }))
+                            })
+                          }
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                   <button
                     className="secondary"
                     onClick={() =>
@@ -619,9 +623,11 @@ function TemplatePanel(props: {
                   </button>
                 </div>
 
-                <button disabled={exerciseDraft.sets.length === 0} onClick={saveExerciseToPlan}>
-                  <Save size={18} /> Сохранить упражнение
-                </button>
+                <div className="exercise-detail-actions">
+                  <button disabled={exerciseDraft.sets.length === 0} onClick={saveExerciseToPlan}>
+                    <Save size={18} /> Сохранить упражнение
+                  </button>
+                </div>
               </div>
             )}
           </section>
