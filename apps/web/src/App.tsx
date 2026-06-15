@@ -70,8 +70,16 @@ export function App() {
 
     function updateViewportVars() {
       const viewport = window.visualViewport;
-      const viewportHeight = viewport?.height ?? window.innerHeight;
-      const keyboardOffset = viewport ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0;
+      const telegramViewportHeight = window.Telegram?.WebApp.viewportHeight;
+      const viewportHeight = Math.min(
+        ...[viewport?.height, telegramViewportHeight, window.innerHeight].filter(
+          (height): height is number => typeof height === 'number' && height > 0
+        )
+      );
+      const keyboardOffset = Math.max(
+        0,
+        window.innerHeight - viewportHeight - (viewport?.offsetTop ?? 0)
+      );
       const keyboardSpace = Math.min(keyboardOffset, 220);
       root.style.setProperty('--app-viewport-height', `${viewportHeight}px`);
       root.style.setProperty('--keyboard-offset', `${keyboardOffset}px`);
@@ -83,11 +91,13 @@ export function App() {
     window.visualViewport?.addEventListener('resize', updateViewportVars);
     window.visualViewport?.addEventListener('scroll', updateViewportVars);
     window.addEventListener('resize', updateViewportVars);
+    window.Telegram?.WebApp.onEvent?.('viewportChanged', updateViewportVars);
 
     return () => {
       window.visualViewport?.removeEventListener('resize', updateViewportVars);
       window.visualViewport?.removeEventListener('scroll', updateViewportVars);
       window.removeEventListener('resize', updateViewportVars);
+      window.Telegram?.WebApp.offEvent?.('viewportChanged', updateViewportVars);
       root.style.removeProperty('--app-viewport-height');
       root.style.removeProperty('--keyboard-offset');
       root.style.removeProperty('--keyboard-space');
@@ -205,6 +215,16 @@ export function App() {
     setMessage('Backup импортирован');
   }
 
+  async function deleteHistorySession(sessionId: string) {
+    if (!window.confirm('Удалить тренировку из истории?')) return;
+    await api.delete(`/api/sessions/${sessionId}`);
+    await refreshHistory();
+    if (selectedProgressExerciseId) {
+      await loadProgress(selectedProgressExerciseId);
+    }
+    setMessage('Тренировка удалена');
+  }
+
   const tabs = useMemo(
     () => [
       { id: 'templates' as const, label: 'Планы', icon: Dumbbell },
@@ -316,6 +336,7 @@ export function App() {
           progress={progress}
           selectedExerciseId={selectedProgressExerciseId}
           onSelectExercise={loadProgress}
+          onDeleteSession={deleteHistorySession}
           onExport={exportBackup}
           onImport={importBackup}
         />
@@ -822,6 +843,7 @@ function HistoryPanel(props: {
   progress: ProgressPoint[];
   selectedExerciseId: string;
   onSelectExercise: (id: string) => void;
+  onDeleteSession: (id: string) => void;
   onExport: () => void;
   onImport: (file: File) => void;
 }) {
@@ -877,7 +899,12 @@ function HistoryPanel(props: {
           <article className="card" key={session.id}>
             <div className="card-header">
               <h3>{session.completedAt ? new Date(session.completedAt).toLocaleDateString('ru-RU') : 'Тренировка'}</h3>
-              <BarChart3 size={18} />
+              <div className="history-card-actions">
+                <BarChart3 size={18} />
+                <button className="icon-button" aria-label="Удалить тренировку" onClick={() => props.onDeleteSession(session.id)}>
+                  <Trash2 size={16} />
+                </button>
+              </div>
             </div>
             <div className="compact-list">
               {session.exercises.map((exercise) => (

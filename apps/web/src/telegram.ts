@@ -1,5 +1,9 @@
 type TelegramWebApp = {
   initData: string;
+  viewportHeight?: number;
+  viewportStableHeight?: number;
+  onEvent?: (eventType: 'viewportChanged', eventHandler: () => void) => void;
+  offEvent?: (eventType: 'viewportChanged', eventHandler: () => void) => void;
   ready: () => void;
   expand: () => void;
 };
@@ -29,4 +33,3 @@ export function getAuthHeaders(): Record<string, string> {
     'x-dev-username': 'dev_user'
   };
 }
-

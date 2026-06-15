@@ -92,6 +92,13 @@ export async function registerSessionRoutes(app: FastifyInstance, context: AppCo
     return session;
   });
 
+  app.delete<{ Params: { id: string } }>('/api/sessions/:id', async (request, reply) => {
+    await context.prisma.workoutSession.deleteMany({
+      where: { id: request.params.id, userId: request.user!.id }
+    });
+    return reply.code(204).send();
+  });
+
   app.post<{ Params: { id: string } }>('/api/sessions/:id/complete', async (request, reply) => {
     const existing = await context.prisma.workoutSession.findFirst({
       where: { id: request.params.id, userId: request.user!.id }
