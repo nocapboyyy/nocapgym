@@ -160,8 +160,7 @@ h3 {
   padding-bottom: max(18px, env(safe-area-inset-bottom, 0px));
 }
 
-.app-shell.bottom-controls-hidden .tabbar,
-.app-shell.bottom-controls-hidden .finish-panel {
+.app-shell.bottom-controls-hidden .tabbar {
   display: none;
 }
 
@@ -661,8 +660,6 @@ h3 {
 }
 
 .finish-panel {
-  position: sticky;
-  bottom: calc(112px + env(safe-area-inset-bottom, 0px));
   gap: 10px;
   padding: 10px;
   border: 1px solid var(--line);

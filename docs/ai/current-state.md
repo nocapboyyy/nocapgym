@@ -23,7 +23,7 @@ Last updated: 2026-06-15
 - Bottom tabbar with iPhone safe-area handling.
 - Plan wizard modal with internal scroll containers.
 - Modal attempts to account for Telegram viewport height and keyboard resizing.
-- When an editable field is focused or keyboard viewport shrink is detected, the bottom tabbar is hidden; the active workout finish controls are also hidden to avoid lifting them above the keyboard.
+- When an editable field is focused or keyboard viewport shrink is detected, the bottom tabbar is hidden. Active workout finish controls are a normal block below the exercise list, not a sticky overlay.
 
 ## Known Risks / Watch Areas
 
