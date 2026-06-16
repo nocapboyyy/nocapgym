@@ -156,6 +156,15 @@ h3 {
   padding: 18px 14px calc(136px + env(safe-area-inset-bottom, 0px));
 }
 
+.app-shell.keyboard-open {
+  padding-bottom: max(18px, env(safe-area-inset-bottom, 0px));
+}
+
+.app-shell.keyboard-open .tabbar,
+.app-shell.keyboard-open .finish-panel {
+  display: none;
+}
+
 .centered {
   display: grid;
   place-items: center;

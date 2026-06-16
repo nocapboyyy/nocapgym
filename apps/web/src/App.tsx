@@ -28,7 +28,40 @@ import type {
   WorkoutTemplate
 } from './types';
 
-type Tab = 'templates' | 'session' | 'history' | 'admin';
+export type Tab = 'templates' | 'session' | 'history' | 'admin';
+
+const tabLabels: Record<Tab, string> = {
+  templates: 'Планы',
+  session: 'Зал',
+  history: 'История',
+  admin: 'Админ'
+};
+
+export function getTabTitle(tab: Tab) {
+  return tabLabels[tab];
+}
+
+export function getKeyboardViewportState(input: {
+  windowInnerHeight: number;
+  visualViewportHeight?: number;
+  telegramViewportHeight?: number;
+  visualViewportOffsetTop?: number;
+}) {
+  const viewportHeight = Math.min(
+    ...[input.visualViewportHeight, input.telegramViewportHeight, input.windowInnerHeight].filter(
+      (height): height is number => typeof height === 'number' && height > 0
+    )
+  );
+  const keyboardOffset = Math.max(0, input.windowInnerHeight - viewportHeight - (input.visualViewportOffsetTop ?? 0));
+
+  return {
+    viewportHeight,
+    keyboardOffset,
+    keyboardSpace: Math.min(keyboardOffset, 220),
+    keyboardLift: -Math.min(keyboardOffset * 0.58, 220),
+    isKeyboardOpen: keyboardOffset > 80
+  };
+}
 
 const emptyTemplate = (): Partial<WorkoutTemplate> & { exercises: TemplateExercise[] } => ({
   name: '',
@@ -59,6 +92,7 @@ export function App() {
   const [progress, setProgress] = useState<ProgressPoint[]>([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   useEffect(() => {
     initTelegramApp();
@@ -70,21 +104,17 @@ export function App() {
 
     function updateViewportVars() {
       const viewport = window.visualViewport;
-      const telegramViewportHeight = window.Telegram?.WebApp.viewportHeight;
-      const viewportHeight = Math.min(
-        ...[viewport?.height, telegramViewportHeight, window.innerHeight].filter(
-          (height): height is number => typeof height === 'number' && height > 0
-        )
-      );
-      const keyboardOffset = Math.max(
-        0,
-        window.innerHeight - viewportHeight - (viewport?.offsetTop ?? 0)
-      );
-      const keyboardSpace = Math.min(keyboardOffset, 220);
-      root.style.setProperty('--app-viewport-height', `${viewportHeight}px`);
-      root.style.setProperty('--keyboard-offset', `${keyboardOffset}px`);
-      root.style.setProperty('--keyboard-space', `${keyboardSpace}px`);
-      root.style.setProperty('--keyboard-lift', `${-Math.min(keyboardOffset * 0.58, 220)}px`);
+      const viewportState = getKeyboardViewportState({
+        windowInnerHeight: window.innerHeight,
+        visualViewportHeight: viewport?.height,
+        telegramViewportHeight: window.Telegram?.WebApp.viewportHeight,
+        visualViewportOffsetTop: viewport?.offsetTop
+      });
+      root.style.setProperty('--app-viewport-height', `${viewportState.viewportHeight}px`);
+      root.style.setProperty('--keyboard-offset', `${viewportState.keyboardOffset}px`);
+      root.style.setProperty('--keyboard-space', `${viewportState.keyboardSpace}px`);
+      root.style.setProperty('--keyboard-lift', `${viewportState.keyboardLift}px`);
+      setKeyboardOpen(viewportState.isKeyboardOpen);
     }
 
     updateViewportVars();
@@ -168,15 +198,6 @@ export function App() {
     setTab('session');
   }
 
-  async function saveSession(session = activeSession) {
-    if (!session) return;
-    const updated = await api.patch<WorkoutSession>(`/api/sessions/${session.id}`, {
-      exercises: session.exercises
-    });
-    setActiveSession(updated);
-    setMessage('Тренировка сохранена');
-  }
-
   async function completeSession(applyToTemplate: boolean) {
     if (!activeSession) return;
     const saved = await api.patch<WorkoutSession>(`/api/sessions/${activeSession.id}`, {
@@ -227,10 +248,10 @@ export function App() {
 
   const tabs = useMemo(
     () => [
-      { id: 'templates' as const, label: 'Планы', icon: Dumbbell },
-      { id: 'session' as const, label: 'Зал', icon: Activity },
-      { id: 'history' as const, label: 'История', icon: History },
-      ...(isAdmin ? [{ id: 'admin' as const, label: 'Админ', icon: Shield }] : [])
+      { id: 'templates' as const, label: getTabTitle('templates'), icon: Dumbbell },
+      { id: 'session' as const, label: getTabTitle('session'), icon: Activity },
+      { id: 'history' as const, label: getTabTitle('history'), icon: History },
+      ...(isAdmin ? [{ id: 'admin' as const, label: getTabTitle('admin'), icon: Shield }] : [])
     ],
     [isAdmin]
   );
@@ -243,11 +264,11 @@ export function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className={keyboardOpen ? 'app-shell keyboard-open' : 'app-shell'}>
       <header className="topbar">
         <div>
           <span className="eyebrow">NOCAPGYM</span>
-          <h1>{tab === 'session' ? 'Зал' : tab === 'history' ? 'Прогресс' : tab === 'admin' ? 'Админка' : 'Тренировки'}</h1>
+          <h1>{getTabTitle(tab)}</h1>
         </div>
         <div className="profile">{user?.firstName ?? user?.username ?? 'Пользователь'}</div>
       </header>
@@ -324,7 +345,6 @@ export function App() {
           session={activeSession}
           exercises={exercises}
           setSession={setActiveSession}
-          onSave={() => saveSession()}
           onComplete={completeSession}
         />
       )}
@@ -675,7 +695,6 @@ function SessionPanel(props: {
   session: WorkoutSession | null;
   exercises: Exercise[];
   setSession: (session: WorkoutSession | null) => void;
-  onSave: () => void;
   onComplete: (applyToTemplate: boolean) => void;
 }) {
   if (!props.session) {
@@ -700,9 +719,6 @@ function SessionPanel(props: {
     <section className="stack">
       <div className="panel-title">
         <h2>Текущая тренировка</h2>
-        <button className="secondary" onClick={props.onSave}>
-          <Save size={18} /> Сохранить
-        </button>
       </div>
 
       {props.session.exercises.map((exercise, exerciseIndex) => (
