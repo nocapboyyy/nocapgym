@@ -63,6 +63,15 @@ export function getKeyboardViewportState(input: {
   };
 }
 
+export function getBottomControlsHidden(input: { isKeyboardOpen: boolean; isEditableFocused: boolean }) {
+  return input.isKeyboardOpen || input.isEditableFocused;
+}
+
+function isEditableElement(element: Element | null) {
+  if (!(element instanceof HTMLElement)) return false;
+  return element.matches('input, textarea, select, [contenteditable="true"]');
+}
+
 const emptyTemplate = (): Partial<WorkoutTemplate> & { exercises: TemplateExercise[] } => ({
   name: '',
   notes: '',
@@ -93,6 +102,7 @@ export function App() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [editableFocused, setEditableFocused] = useState(false);
 
   useEffect(() => {
     initTelegramApp();
@@ -132,6 +142,23 @@ export function App() {
       root.style.removeProperty('--keyboard-offset');
       root.style.removeProperty('--keyboard-space');
       root.style.removeProperty('--keyboard-lift');
+    };
+  }, []);
+
+  useEffect(() => {
+    function updateEditableFocus() {
+      setEditableFocused(isEditableElement(document.activeElement));
+    }
+
+    function handleFocusOut() {
+      window.setTimeout(updateEditableFocus, 0);
+    }
+
+    document.addEventListener('focusin', updateEditableFocus);
+    document.addEventListener('focusout', handleFocusOut);
+    return () => {
+      document.removeEventListener('focusin', updateEditableFocus);
+      document.removeEventListener('focusout', handleFocusOut);
     };
   }, []);
 
@@ -258,13 +285,14 @@ export function App() {
   const completedSessionsCount = history.length;
   const plannedExercisesCount = templates.reduce((total, template) => total + template.exercises.length, 0);
   const activeSetsCount = activeSession?.exercises.reduce((total, exercise) => total + exercise.sets.length, 0) ?? 0;
+  const bottomControlsHidden = getBottomControlsHidden({ isKeyboardOpen: keyboardOpen, isEditableFocused: editableFocused });
 
   if (loading) {
     return <main className="app-shell centered">Загрузка...</main>;
   }
 
   return (
-    <main className={keyboardOpen ? 'app-shell keyboard-open' : 'app-shell'}>
+    <main className={bottomControlsHidden ? 'app-shell bottom-controls-hidden' : 'app-shell'}>
       <header className="topbar">
         <div>
           <span className="eyebrow">NOCAPGYM</span>

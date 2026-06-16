@@ -156,12 +156,12 @@ h3 {
   padding: 18px 14px calc(136px + env(safe-area-inset-bottom, 0px));
 }
 
-.app-shell.keyboard-open {
+.app-shell.bottom-controls-hidden {
   padding-bottom: max(18px, env(safe-area-inset-bottom, 0px));
 }
 
-.app-shell.keyboard-open .tabbar,
-.app-shell.keyboard-open .finish-panel {
+.app-shell.bottom-controls-hidden .tabbar,
+.app-shell.bottom-controls-hidden .finish-panel {
   display: none;
 }
 
@@ -662,7 +662,7 @@ h3 {
 
 .finish-panel {
   position: sticky;
-  bottom: 92px;
+  bottom: calc(112px + env(safe-area-inset-bottom, 0px));
   gap: 10px;
   padding: 10px;
   border: 1px solid var(--line);

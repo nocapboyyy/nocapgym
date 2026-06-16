@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getKeyboardViewportState, getTabTitle } from './App';
+import { getBottomControlsHidden, getKeyboardViewportState, getTabTitle } from './App';
 
 describe('getTabTitle', () => {
   it('matches the visible tab labels', () => {
@@ -30,5 +30,15 @@ describe('getKeyboardViewportState', () => {
     });
 
     expect(state.isKeyboardOpen).toBe(false);
+  });
+});
+
+describe('getBottomControlsHidden', () => {
+  it('hides bottom controls when an editable field is focused even without viewport offset', () => {
+    expect(getBottomControlsHidden({ isKeyboardOpen: false, isEditableFocused: true })).toBe(true);
+  });
+
+  it('keeps bottom controls visible when there is no keyboard signal or focused editor', () => {
+    expect(getBottomControlsHidden({ isKeyboardOpen: false, isEditableFocused: false })).toBe(false);
   });
 });
