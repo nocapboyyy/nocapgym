@@ -12,6 +12,7 @@ Last updated: 2026-06-15
 - Plan exercises can be reopened from the wizard summary and edited in place.
 - Plan exercises can be reordered in the wizard summary by dragging a handle.
 - Exercise drag reorder temporarily disables Telegram vertical swipes to prevent Mini App collapse.
+- The plan exercise summary keeps fixed-height cards and auto-scrolls while dragging through long lists.
 - Active workout screen with editable exercises and sets.
 - Workout completion with optional template update.
 - Completed workout history.

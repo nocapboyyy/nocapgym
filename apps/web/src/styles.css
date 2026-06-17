@@ -529,10 +529,15 @@ h3 {
 .plan-exercise-summary,
 .exercise-picker-list {
   align-content: start;
+  grid-auto-rows: max-content;
   overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
+}
+
+.plan-exercise-summary.is-dragging {
+  touch-action: none;
 }
 
 .dialog-actions {
@@ -613,6 +618,7 @@ h3 {
   grid-template-columns: 34px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
+  min-height: 66px;
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;

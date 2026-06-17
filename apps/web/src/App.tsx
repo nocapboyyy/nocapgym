@@ -143,6 +143,23 @@ export function reorderTemplateExercises(exercises: TemplateExercise[], fromInde
   return nextExercises.map((exercise, order) => ({ ...exercise, order }));
 }
 
+export function getDragAutoScrollDelta(input: { pointerY: number; containerTop: number; containerBottom: number }) {
+  const edgeSize = 52;
+  const maxDelta = 18;
+
+  if (input.pointerY < input.containerTop + edgeSize) {
+    const distance = Math.max(0, input.pointerY - input.containerTop);
+    return -Math.ceil(((edgeSize - distance) / edgeSize) * maxDelta);
+  }
+
+  if (input.pointerY > input.containerBottom - edgeSize) {
+    const distance = Math.max(0, input.containerBottom - input.pointerY);
+    return Math.ceil(((edgeSize - distance) / edgeSize) * maxDelta);
+  }
+
+  return 0;
+}
+
 export function App() {
   const [tab, setTab] = useState<Tab>('templates');
   const [user, setUser] = useState<User | null>(null);
@@ -487,7 +504,13 @@ function TemplatePanel(props: {
   const [draggingExerciseIndex, setDraggingExerciseIndex] = useState<number | null>(null);
   const draftRef = useRef(props.draft);
   const summaryRef = useRef<HTMLDivElement | null>(null);
-  const dragStateRef = useRef<{ currentIndex: number; pointerId: number; cleanup: () => void } | null>(null);
+  const dragStateRef = useRef<{
+    currentIndex: number;
+    lastPointerY: number;
+    pointerId: number;
+    cleanup: () => void;
+  } | null>(null);
+  const dragScrollFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     draftRef.current = props.draft;
@@ -496,6 +519,9 @@ function TemplatePanel(props: {
   useEffect(() => {
     return () => {
       dragStateRef.current?.cleanup();
+      if (dragScrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(dragScrollFrameRef.current);
+      }
       setTelegramVerticalSwipesEnabled(true);
     };
   }, []);
@@ -604,8 +630,50 @@ function TemplatePanel(props: {
   function finishExerciseDrag() {
     dragStateRef.current?.cleanup();
     dragStateRef.current = null;
+    if (dragScrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(dragScrollFrameRef.current);
+      dragScrollFrameRef.current = null;
+    }
     setTelegramVerticalSwipesEnabled(true);
     setDraggingExerciseIndex(null);
+  }
+
+  function updateDraggedExercisePosition(pointerY: number) {
+    const dragState = dragStateRef.current;
+    if (!dragState) return;
+
+    const targetIndex = getDragTargetIndex(pointerY);
+    if (targetIndex === -1 || targetIndex === dragState.currentIndex) return;
+
+    const reorderedExercises = reorderTemplateExercises(draftRef.current.exercises, dragState.currentIndex, targetIndex);
+    const nextDraft = { ...draftRef.current, exercises: reorderedExercises };
+    draftRef.current = nextDraft;
+    dragState.currentIndex = targetIndex;
+    setDraggingExerciseIndex(targetIndex);
+    props.setDraft(nextDraft);
+  }
+
+  function runDragAutoScroll() {
+    const dragState = dragStateRef.current;
+    const summary = summaryRef.current;
+    if (!dragState || !summary) {
+      dragScrollFrameRef.current = null;
+      return;
+    }
+
+    const rect = summary.getBoundingClientRect();
+    const scrollDelta = getDragAutoScrollDelta({
+      pointerY: dragState.lastPointerY,
+      containerTop: rect.top,
+      containerBottom: rect.bottom
+    });
+
+    if (scrollDelta !== 0) {
+      summary.scrollTop += scrollDelta;
+      updateDraggedExercisePosition(dragState.lastPointerY);
+    }
+
+    dragScrollFrameRef.current = window.requestAnimationFrame(runDragAutoScroll);
   }
 
   function getDragTargetIndex(pointerY: number) {
@@ -628,16 +696,8 @@ function TemplatePanel(props: {
       const dragState = dragStateRef.current;
       if (!dragState || pointerEvent.pointerId !== dragState.pointerId) return;
       pointerEvent.preventDefault();
-
-      const targetIndex = getDragTargetIndex(pointerEvent.clientY);
-      if (targetIndex === -1 || targetIndex === dragState.currentIndex) return;
-
-      const reorderedExercises = reorderTemplateExercises(draftRef.current.exercises, dragState.currentIndex, targetIndex);
-      const nextDraft = { ...draftRef.current, exercises: reorderedExercises };
-      draftRef.current = nextDraft;
-      dragState.currentIndex = targetIndex;
-      setDraggingExerciseIndex(targetIndex);
-      props.setDraft(nextDraft);
+      dragState.lastPointerY = pointerEvent.clientY;
+      updateDraggedExercisePosition(pointerEvent.clientY);
     };
 
     const handlePointerUp = (pointerEvent: PointerEvent) => {
@@ -653,11 +713,12 @@ function TemplatePanel(props: {
 
     dragStateRef.current?.cleanup();
     setTelegramVerticalSwipesEnabled(false);
-    dragStateRef.current = { currentIndex: index, pointerId: event.pointerId, cleanup };
+    dragStateRef.current = { currentIndex: index, lastPointerY: event.clientY, pointerId: event.pointerId, cleanup };
     setDraggingExerciseIndex(index);
     window.addEventListener('pointermove', handlePointerMove, { passive: false });
     window.addEventListener('pointerup', handlePointerUp);
     window.addEventListener('pointercancel', handlePointerUp);
+    dragScrollFrameRef.current = window.requestAnimationFrame(runDragAutoScroll);
   }
 
   function handleExerciseDragKeyDown(index: number, event: ReactKeyboardEvent<HTMLButtonElement>) {

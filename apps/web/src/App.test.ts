@@ -3,6 +3,7 @@ import {
   getBottomControlsHidden,
   getHistorySessionPlanTitle,
   getKeyboardViewportState,
+  getDragAutoScrollDelta,
   getDashboardStripVisible,
   reorderTemplateExercises,
   getSavedTemplateExercises,
@@ -68,6 +69,17 @@ describe('getHistorySessionPlanTitle', () => {
 
   it('falls back when the completed session has no template', () => {
     expect(getHistorySessionPlanTitle({ template: null })).toBe('План не найден');
+  });
+});
+
+describe('getDragAutoScrollDelta', () => {
+  it('scrolls up near the top edge and down near the bottom edge', () => {
+    expect(getDragAutoScrollDelta({ pointerY: 112, containerTop: 100, containerBottom: 500 })).toBeLessThan(0);
+    expect(getDragAutoScrollDelta({ pointerY: 488, containerTop: 100, containerBottom: 500 })).toBeGreaterThan(0);
+  });
+
+  it('does not scroll in the safe middle area', () => {
+    expect(getDragAutoScrollDelta({ pointerY: 300, containerTop: 100, containerBottom: 500 })).toBe(0);
   });
 });
 
