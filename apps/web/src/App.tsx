@@ -17,7 +17,7 @@ import {
   X
 } from 'lucide-react';
 import { api } from './api';
-import { initTelegramApp } from './telegram';
+import { initTelegramApp, setTelegramVerticalSwipesEnabled } from './telegram';
 import type {
   Exercise,
   ProgressPoint,
@@ -494,7 +494,10 @@ function TemplatePanel(props: {
   }, [props.draft]);
 
   useEffect(() => {
-    return () => dragStateRef.current?.cleanup();
+    return () => {
+      dragStateRef.current?.cleanup();
+      setTelegramVerticalSwipesEnabled(true);
+    };
   }, []);
 
   useEffect(() => {
@@ -601,6 +604,7 @@ function TemplatePanel(props: {
   function finishExerciseDrag() {
     dragStateRef.current?.cleanup();
     dragStateRef.current = null;
+    setTelegramVerticalSwipesEnabled(true);
     setDraggingExerciseIndex(null);
   }
 
@@ -648,6 +652,7 @@ function TemplatePanel(props: {
     };
 
     dragStateRef.current?.cleanup();
+    setTelegramVerticalSwipesEnabled(false);
     dragStateRef.current = { currentIndex: index, pointerId: event.pointerId, cleanup };
     setDraggingExerciseIndex(index);
     window.addEventListener('pointermove', handlePointerMove, { passive: false });

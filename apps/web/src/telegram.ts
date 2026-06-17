@@ -4,6 +4,8 @@ type TelegramWebApp = {
   viewportStableHeight?: number;
   onEvent?: (eventType: 'viewportChanged', eventHandler: () => void) => void;
   offEvent?: (eventType: 'viewportChanged', eventHandler: () => void) => void;
+  disableVerticalSwipes?: () => void;
+  enableVerticalSwipes?: () => void;
   ready: () => void;
   expand: () => void;
 };
@@ -19,6 +21,15 @@ declare global {
 export function initTelegramApp() {
   window.Telegram?.WebApp.ready();
   window.Telegram?.WebApp.expand();
+}
+
+export function setTelegramVerticalSwipesEnabled(enabled: boolean) {
+  if (enabled) {
+    window.Telegram?.WebApp.enableVerticalSwipes?.();
+    return;
+  }
+
+  window.Telegram?.WebApp.disableVerticalSwipes?.();
 }
 
 export function getAuthHeaders(): Record<string, string> {
