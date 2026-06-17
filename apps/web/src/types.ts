@@ -61,6 +61,7 @@ export type SessionExercise = {
 export type WorkoutSession = {
   id: string;
   templateId: string | null;
+  template?: Pick<WorkoutTemplate, 'id' | 'name' | 'notes'> | null;
   startedAt: string;
   completedAt: string | null;
   status: 'active' | 'completed';
@@ -73,4 +74,3 @@ export type ProgressPoint = {
   bestReps: number;
   sets: Array<{ weightKg: number; reps: number }>;
 };
-
