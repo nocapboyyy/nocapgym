@@ -8,9 +8,16 @@ Last updated: 2026-06-15
 - Dev auth fallback for local browser testing.
 - User workout templates.
 - Plan creation wizard with modal exercise picker and set editor.
+- In plan creation, adding a set copies the previous set's type, target weight, and target reps.
+- Plan exercises can be reopened from the wizard summary and edited in place.
+- Plan exercises can be reordered in the wizard summary by dragging a handle.
+- Exercise drag reorder temporarily disables Telegram vertical swipes to prevent Mini App collapse.
+- The plan exercise summary keeps fixed-height cards and auto-scrolls while dragging through long lists.
 - Active workout screen with editable exercises and sets.
 - Workout completion with optional template update.
 - Completed workout history.
+- History workout cards show the source plan name instead of a generic stats icon.
+- The dashboard summary strip is hidden on the Admin tab.
 - Per-exercise progress from working sets.
 - User JSON export/import.
 - Admin exercise management.

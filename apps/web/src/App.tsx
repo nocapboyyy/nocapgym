@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import {
   Activity,
   ArrowLeft,
-  BarChart3,
   Check,
   Dumbbell,
+  GripVertical,
   History,
   ListPlus,
+  Pencil,
   Play,
   Plus,
   Save,
@@ -15,7 +17,7 @@ import {
   X
 } from 'lucide-react';
 import { api } from './api';
-import { initTelegramApp } from './telegram';
+import { initTelegramApp, setTelegramVerticalSwipesEnabled } from './telegram';
 import type {
   Exercise,
   ProgressPoint,
@@ -67,6 +69,14 @@ export function getBottomControlsHidden(input: { isKeyboardOpen: boolean; isEdit
   return input.isKeyboardOpen || input.isEditableFocused;
 }
 
+export function getDashboardStripVisible(tab: Tab) {
+  return tab !== 'admin';
+}
+
+export function getHistorySessionPlanTitle(input: { template?: Pick<WorkoutTemplate, 'id' | 'name'> | null }) {
+  return input.template?.name?.trim() || 'План не найден';
+}
+
 function isEditableElement(element: Element | null) {
   if (!(element instanceof HTMLElement)) return false;
   return element.matches('input, textarea, select, [contenteditable="true"]');
@@ -84,6 +94,70 @@ function numberInputValue(value: number | null | undefined) {
 
 function parseNumberInput(value: string) {
   return value === '' ? 0 : Number(value);
+}
+
+export function getNextTemplateSet(sets: TemplateSet[]): TemplateSet {
+  const previousSet = sets.at(-1);
+
+  return {
+    type: previousSet?.type ?? 'working',
+    targetWeightKg: previousSet?.targetWeightKg ?? 0,
+    targetReps: previousSet?.targetReps ?? 8,
+    order: sets.length
+  };
+}
+
+export function getSavedTemplateExercises(
+  exercises: TemplateExercise[],
+  exerciseDraft: TemplateExercise,
+  editingExerciseIndex: number | null
+) {
+  const savedExercise = {
+    ...exerciseDraft,
+    sets: exerciseDraft.sets.map((set, order) => ({ ...set, order }))
+  };
+
+  const nextExercises =
+    editingExerciseIndex === null
+      ? [...exercises, savedExercise]
+      : exercises.map((exercise, index) => (index === editingExerciseIndex ? savedExercise : exercise));
+
+  return nextExercises.map((exercise, order) => ({ ...exercise, order }));
+}
+
+export function reorderTemplateExercises(exercises: TemplateExercise[], fromIndex: number, toIndex: number) {
+  if (
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= exercises.length ||
+    toIndex >= exercises.length ||
+    fromIndex === toIndex
+  ) {
+    return exercises.map((exercise, order) => ({ ...exercise, order }));
+  }
+
+  const nextExercises = [...exercises];
+  const [movedExercise] = nextExercises.splice(fromIndex, 1);
+  nextExercises.splice(toIndex, 0, movedExercise);
+
+  return nextExercises.map((exercise, order) => ({ ...exercise, order }));
+}
+
+export function getDragAutoScrollDelta(input: { pointerY: number; containerTop: number; containerBottom: number }) {
+  const edgeSize = 52;
+  const maxDelta = 18;
+
+  if (input.pointerY < input.containerTop + edgeSize) {
+    const distance = Math.max(0, input.pointerY - input.containerTop);
+    return -Math.ceil(((edgeSize - distance) / edgeSize) * maxDelta);
+  }
+
+  if (input.pointerY > input.containerBottom - edgeSize) {
+    const distance = Math.max(0, input.containerBottom - input.pointerY);
+    return Math.ceil(((edgeSize - distance) / edgeSize) * maxDelta);
+  }
+
+  return 0;
 }
 
 export function App() {
@@ -203,7 +277,11 @@ export function App() {
     const payload = {
       name: templateDraft.name,
       notes: templateDraft.notes,
-      exercises: templateDraft.exercises
+      exercises: templateDraft.exercises.map((exercise) => ({
+        exerciseId: exercise.exerciseId,
+        order: exercise.order,
+        sets: exercise.sets
+      }))
     };
 
     if (editingTemplateId) {
@@ -316,24 +394,26 @@ export function App() {
         ))}
       </nav>
 
-      <section className="dashboard-strip" aria-label="Сводка">
-        <div>
-          <span className="metric-label">Планы</span>
-          <strong>{templates.length}</strong>
-        </div>
-        <div>
-          <span className="metric-label">В плане</span>
-          <strong>{plannedExercisesCount}</strong>
-        </div>
-        <div>
-          <span className="metric-label">История</span>
-          <strong>{completedSessionsCount}</strong>
-        </div>
-        <div>
-          <span className="metric-label">Сейчас</span>
-          <strong>{activeSetsCount}</strong>
-        </div>
-      </section>
+      {getDashboardStripVisible(tab) && (
+        <section className="dashboard-strip" aria-label="Сводка">
+          <div>
+            <span className="metric-label">Планы</span>
+            <strong>{templates.length}</strong>
+          </div>
+          <div>
+            <span className="metric-label">В плане</span>
+            <strong>{plannedExercisesCount}</strong>
+          </div>
+          <div>
+            <span className="metric-label">История</span>
+            <strong>{completedSessionsCount}</strong>
+          </div>
+          <div>
+            <span className="metric-label">Сейчас</span>
+            <strong>{activeSetsCount}</strong>
+          </div>
+        </section>
+      )}
 
       {tab === 'templates' && (
         <TemplatePanel
@@ -349,6 +429,7 @@ export function App() {
               notes: template.notes,
               exercises: template.exercises.map((exercise) => ({
                 exerciseId: exercise.exerciseId,
+                exercise: exercise.exercise,
                 order: exercise.order,
                 sets: exercise.sets
               }))
@@ -419,6 +500,31 @@ function TemplatePanel(props: {
   const [dialogStep, setDialogStep] = useState<'form' | 'exercise-list' | 'exercise-detail'>('form');
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const [exerciseDraft, setExerciseDraft] = useState<TemplateExercise | null>(null);
+  const [editingExerciseIndex, setEditingExerciseIndex] = useState<number | null>(null);
+  const [draggingExerciseIndex, setDraggingExerciseIndex] = useState<number | null>(null);
+  const draftRef = useRef(props.draft);
+  const summaryRef = useRef<HTMLDivElement | null>(null);
+  const dragStateRef = useRef<{
+    currentIndex: number;
+    lastPointerY: number;
+    pointerId: number;
+    cleanup: () => void;
+  } | null>(null);
+  const dragScrollFrameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    draftRef.current = props.draft;
+  }, [props.draft]);
+
+  useEffect(() => {
+    return () => {
+      dragStateRef.current?.cleanup();
+      if (dragScrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(dragScrollFrameRef.current);
+      }
+      setTelegramVerticalSwipesEnabled(true);
+    };
+  }, []);
 
   useEffect(() => {
     if (props.editingTemplateId) {
@@ -444,6 +550,7 @@ function TemplatePanel(props: {
     props.onCancelEdit();
     setSelectedExercise(null);
     setExerciseDraft(null);
+    setEditingExerciseIndex(null);
     setDialogStep('form');
     setIsDialogOpen(true);
   }
@@ -453,6 +560,7 @@ function TemplatePanel(props: {
     setDialogStep('form');
     setSelectedExercise(null);
     setExerciseDraft(null);
+    setEditingExerciseIndex(null);
     props.onCancelEdit();
   }
 
@@ -463,6 +571,19 @@ function TemplatePanel(props: {
       order: props.draft.exercises.length,
       sets: [{ type: 'working', targetWeightKg: 0, targetReps: 8, order: 0 }]
     });
+    setEditingExerciseIndex(null);
+    setDialogStep('exercise-detail');
+  }
+
+  function editExerciseDetail(exerciseIndex: number) {
+    const exercise = props.draft.exercises[exerciseIndex];
+    const catalogExercise = props.exercises.find((item) => item.id === exercise.exerciseId);
+    setSelectedExercise(catalogExercise ?? exercise.exercise ?? null);
+    setExerciseDraft({
+      ...exercise,
+      sets: exercise.sets.map((set, order) => ({ ...set, order }))
+    });
+    setEditingExerciseIndex(exerciseIndex);
     setDialogStep('exercise-detail');
   }
 
@@ -480,17 +601,11 @@ function TemplatePanel(props: {
     if (!exerciseDraft) return;
     props.setDraft({
       ...props.draft,
-      exercises: [
-        ...props.draft.exercises,
-        {
-          ...exerciseDraft,
-          order: props.draft.exercises.length,
-          sets: exerciseDraft.sets.map((set, order) => ({ ...set, order }))
-        }
-      ]
+      exercises: getSavedTemplateExercises(props.draft.exercises, exerciseDraft, editingExerciseIndex)
     });
     setSelectedExercise(null);
     setExerciseDraft(null);
+    setEditingExerciseIndex(null);
     setDialogStep('form');
   }
 
@@ -503,6 +618,133 @@ function TemplatePanel(props: {
     });
   }
 
+  function moveTemplateExercise(fromIndex: number, toIndex: number) {
+    const boundedToIndex = Math.max(0, Math.min(toIndex, props.draft.exercises.length - 1));
+    if (fromIndex === boundedToIndex) return;
+    props.setDraft({
+      ...props.draft,
+      exercises: reorderTemplateExercises(props.draft.exercises, fromIndex, boundedToIndex)
+    });
+  }
+
+  function finishExerciseDrag() {
+    dragStateRef.current?.cleanup();
+    dragStateRef.current = null;
+    if (dragScrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(dragScrollFrameRef.current);
+      dragScrollFrameRef.current = null;
+    }
+    setTelegramVerticalSwipesEnabled(true);
+    setDraggingExerciseIndex(null);
+  }
+
+  function updateDraggedExercisePosition(pointerY: number) {
+    const dragState = dragStateRef.current;
+    if (!dragState) return;
+
+    const targetIndex = getDragTargetIndex(pointerY);
+    if (targetIndex === -1 || targetIndex === dragState.currentIndex) return;
+
+    const reorderedExercises = reorderTemplateExercises(draftRef.current.exercises, dragState.currentIndex, targetIndex);
+    const nextDraft = { ...draftRef.current, exercises: reorderedExercises };
+    draftRef.current = nextDraft;
+    dragState.currentIndex = targetIndex;
+    setDraggingExerciseIndex(targetIndex);
+    props.setDraft(nextDraft);
+  }
+
+  function runDragAutoScroll() {
+    const dragState = dragStateRef.current;
+    const summary = summaryRef.current;
+    if (!dragState || !summary) {
+      dragScrollFrameRef.current = null;
+      return;
+    }
+
+    const rect = summary.getBoundingClientRect();
+    const scrollDelta = getDragAutoScrollDelta({
+      pointerY: dragState.lastPointerY,
+      containerTop: rect.top,
+      containerBottom: rect.bottom
+    });
+
+    if (scrollDelta !== 0) {
+      summary.scrollTop += scrollDelta;
+      updateDraggedExercisePosition(dragState.lastPointerY);
+    }
+
+    dragScrollFrameRef.current = window.requestAnimationFrame(runDragAutoScroll);
+  }
+
+  function getDragTargetIndex(pointerY: number) {
+    const cards = Array.from(summaryRef.current?.querySelectorAll<HTMLElement>('[data-exercise-index]') ?? []);
+    if (cards.length === 0) return -1;
+
+    const targetIndex = cards.findIndex((card) => {
+      const rect = card.getBoundingClientRect();
+      return pointerY < rect.top + rect.height / 2;
+    });
+
+    return targetIndex === -1 ? cards.length - 1 : targetIndex;
+  }
+
+  function startExerciseDrag(index: number, event: ReactPointerEvent<HTMLButtonElement>) {
+    if (props.draft.exercises.length < 2 || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    event.preventDefault();
+
+    const handlePointerMove = (pointerEvent: PointerEvent) => {
+      const dragState = dragStateRef.current;
+      if (!dragState || pointerEvent.pointerId !== dragState.pointerId) return;
+      pointerEvent.preventDefault();
+      dragState.lastPointerY = pointerEvent.clientY;
+      updateDraggedExercisePosition(pointerEvent.clientY);
+    };
+
+    const handlePointerUp = (pointerEvent: PointerEvent) => {
+      if (pointerEvent.pointerId !== dragStateRef.current?.pointerId) return;
+      finishExerciseDrag();
+    };
+
+    const cleanup = () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+
+    dragStateRef.current?.cleanup();
+    setTelegramVerticalSwipesEnabled(false);
+    dragStateRef.current = { currentIndex: index, lastPointerY: event.clientY, pointerId: event.pointerId, cleanup };
+    setDraggingExerciseIndex(index);
+    window.addEventListener('pointermove', handlePointerMove, { passive: false });
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+    dragScrollFrameRef.current = window.requestAnimationFrame(runDragAutoScroll);
+  }
+
+  function handleExerciseDragKeyDown(index: number, event: ReactKeyboardEvent<HTMLButtonElement>) {
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      moveTemplateExercise(index, index - 1);
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      moveTemplateExercise(index, index + 1);
+    }
+  }
+
+  function goBackFromDialogStep() {
+    if (dialogStep === 'exercise-detail') {
+      setDialogStep(editingExerciseIndex === null ? 'exercise-list' : 'form');
+      setSelectedExercise(null);
+      setExerciseDraft(null);
+      setEditingExerciseIndex(null);
+      return;
+    }
+
+    setDialogStep('form');
+  }
+
   async function savePlan() {
     if (!props.draft.name?.trim() || props.draft.exercises.length === 0) {
       await props.onSave();
@@ -513,6 +755,7 @@ function TemplatePanel(props: {
     setDialogStep('form');
     setSelectedExercise(null);
     setExerciseDraft(null);
+    setEditingExerciseIndex(null);
   }
 
   const dialogTitle =
@@ -568,7 +811,7 @@ function TemplatePanel(props: {
               {dialogStep === 'form' ? (
                 <span className="dialog-spacer" aria-hidden="true" />
               ) : (
-                <button className="icon-button" aria-label="Назад" onClick={() => setDialogStep(dialogStep === 'exercise-detail' ? 'exercise-list' : 'form')}>
+                <button className="icon-button" aria-label="Назад" onClick={goBackFromDialogStep}>
                   <ArrowLeft size={18} />
                 </button>
               )}
@@ -593,21 +836,39 @@ function TemplatePanel(props: {
                   />
                 </div>
 
-                <div className="plan-exercise-summary">
+                <div className={draggingExerciseIndex === null ? 'plan-exercise-summary' : 'plan-exercise-summary is-dragging'} ref={summaryRef}>
                   {props.draft.exercises.length === 0 ? (
                     <p className="empty">Добавьте упражнения из каталога.</p>
                   ) : (
                     props.draft.exercises.map((exercise, exerciseIndex) => {
                       const catalogExercise = props.exercises.find((item) => item.id === exercise.exerciseId);
                       return (
-                        <article className="exercise-summary-card" key={`${exercise.exerciseId}-${exerciseIndex}`}>
-                          <div>
-                            <h3>{catalogExercise?.name ?? 'Упражнение'}</h3>
+                        <article
+                          className={draggingExerciseIndex === exerciseIndex ? 'exercise-summary-card dragging' : 'exercise-summary-card'}
+                          data-exercise-index={exerciseIndex}
+                          key={`${exercise.exerciseId}-${exerciseIndex}`}
+                        >
+                          <button
+                            className="exercise-drag-handle"
+                            aria-label="Перетащить упражнение"
+                            onKeyDown={(event) => handleExerciseDragKeyDown(exerciseIndex, event)}
+                            onPointerDown={(event) => startExerciseDrag(exerciseIndex, event)}
+                            type="button"
+                          >
+                            <GripVertical size={18} />
+                          </button>
+                          <div className="exercise-summary-content">
+                            <h3>{catalogExercise?.name ?? exercise.exercise?.name ?? 'Упражнение'}</h3>
                             <span className="muted">{exercise.sets.length} подходов</span>
                           </div>
-                          <button className="icon-button" aria-label="Удалить упражнение" onClick={() => removeExerciseFromPlan(exerciseIndex)}>
-                            <Trash2 size={17} />
-                          </button>
+                          <div className="exercise-summary-actions">
+                            <button className="icon-button" aria-label="Редактировать упражнение" onClick={() => editExerciseDetail(exerciseIndex)}>
+                              <Pencil size={17} />
+                            </button>
+                            <button className="icon-button" aria-label="Удалить упражнение" onClick={() => removeExerciseFromPlan(exerciseIndex)}>
+                              <Trash2 size={17} />
+                            </button>
+                          </div>
                         </article>
                       );
                     })
@@ -694,10 +955,7 @@ function TemplatePanel(props: {
                     onClick={() =>
                       setExerciseDraft({
                         ...exerciseDraft,
-                        sets: [
-                          ...exerciseDraft.sets,
-                          { type: 'working', targetWeightKg: 0, targetReps: 8, order: exerciseDraft.sets.length }
-                        ]
+                        sets: [...exerciseDraft.sets, getNextTemplateSet(exerciseDraft.sets)]
                       })
                     }
                   >
@@ -707,7 +965,7 @@ function TemplatePanel(props: {
 
                 <div className="exercise-detail-actions">
                   <button disabled={exerciseDraft.sets.length === 0} onClick={saveExerciseToPlan}>
-                    <Save size={18} /> Сохранить упражнение
+                    <Save size={18} /> {editingExerciseIndex === null ? 'Сохранить упражнение' : 'Готово'}
                   </button>
                 </div>
               </div>
@@ -941,10 +1199,10 @@ function HistoryPanel(props: {
         {props.history.length === 0 && <p className="empty">Завершённых тренировок пока нет.</p>}
         {props.history.map((session) => (
           <article className="card" key={session.id}>
-            <div className="card-header">
+            <div className="card-header history-card-header">
               <h3>{session.completedAt ? new Date(session.completedAt).toLocaleDateString('ru-RU') : 'Тренировка'}</h3>
               <div className="history-card-actions">
-                <BarChart3 size={18} />
+                <span className="history-plan-name">{getHistorySessionPlanTitle(session)}</span>
                 <button className="icon-button" aria-label="Удалить тренировку" onClick={() => props.onDeleteSession(session.id)}>
                   <Trash2 size={16} />
                 </button>
