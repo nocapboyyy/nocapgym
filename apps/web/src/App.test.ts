@@ -20,7 +20,7 @@ describe('getProgressExercises', () => {
       valid: { id: 'valid', name: 'Армейский жим', muscleGroup: 'Плечи', equipment: 'Гантели', techniqueNote: null, isHidden: false },
       warmup: { id: 'warmup', name: 'Разминка', muscleGroup: 'Ноги', equipment: 'Штанга', techniqueNote: null, isHidden: false },
       incomplete: { id: 'incomplete', name: 'Незавершённое', muscleGroup: 'Спина', equipment: 'Блок', techniqueNote: null, isHidden: false },
-      missingActual: { id: 'missing-actual', name: 'Без факта', muscleGroup: 'Руки', equipment: 'Гантели', techniqueNote: null, isHidden: false }
+      missingActualWeight: { id: 'missing-actual-weight', name: 'Без факта', muscleGroup: 'Руки', equipment: 'Гантели', techniqueNote: null, isHidden: false }
     };
     const set = (patch: Partial<SessionSet>): SessionSet => ({
       type: 'working', plannedWeightKg: null, plannedReps: null,
@@ -35,7 +35,8 @@ describe('getProgressExercises', () => {
         { exerciseId: 'hidden', order: 2, exercise: exercises.hidden, sets: [set({ actualWeightKg: 55 })] },
         { exerciseId: 'warmup', order: 3, exercise: exercises.warmup, sets: [set({ type: 'warmup' })] },
         { exerciseId: 'incomplete', order: 4, exercise: exercises.incomplete, sets: [set({ completed: false })] },
-        { exerciseId: 'missing-actual', order: 5, exercise: exercises.missingActual, sets: [set({ actualReps: null })] }
+        { exerciseId: 'missing-actual-weight', order: 5, exercise: exercises.missingActualWeight, sets: [set({ actualWeightKg: null })] },
+        { exerciseId: 'missing-exercise', order: 6, sets: [set({})] }
       ]
     }];
 
