@@ -5,11 +5,43 @@ import {
   getKeyboardViewportState,
   getDragAutoScrollDelta,
   getDashboardStripVisible,
+  getProgressExercises,
   reorderTemplateExercises,
   getSavedTemplateExercises,
   getTabTitle,
   getNextTemplateSet
 } from './App';
+import type { Exercise, SessionSet, WorkoutSession } from './types';
+
+describe('getProgressExercises', () => {
+  it('returns unique history exercises with completed working progress sorted by name', () => {
+    const exercises: Record<string, Exercise> = {
+      hidden: { id: 'hidden', name: 'Жим лёжа', muscleGroup: 'Грудь', equipment: 'Штанга', techniqueNote: null, isHidden: true },
+      valid: { id: 'valid', name: 'Армейский жим', muscleGroup: 'Плечи', equipment: 'Гантели', techniqueNote: null, isHidden: false },
+      warmup: { id: 'warmup', name: 'Разминка', muscleGroup: 'Ноги', equipment: 'Штанга', techniqueNote: null, isHidden: false },
+      incomplete: { id: 'incomplete', name: 'Незавершённое', muscleGroup: 'Спина', equipment: 'Блок', techniqueNote: null, isHidden: false },
+      missingActual: { id: 'missing-actual', name: 'Без факта', muscleGroup: 'Руки', equipment: 'Гантели', techniqueNote: null, isHidden: false }
+    };
+    const set = (patch: Partial<SessionSet>): SessionSet => ({
+      type: 'working', plannedWeightKg: null, plannedReps: null,
+      actualWeightKg: 50, actualReps: 8, completed: true, order: 0, ...patch
+    });
+    const history: WorkoutSession[] = [{
+      id: 'session-1', templateId: null, startedAt: '2026-06-01T10:00:00Z',
+      completedAt: '2026-06-01T11:00:00Z', status: 'completed',
+      exercises: [
+        { exerciseId: 'hidden', order: 0, exercise: exercises.hidden, sets: [set({})] },
+        { exerciseId: 'valid', order: 1, exercise: exercises.valid, sets: [set({})] },
+        { exerciseId: 'hidden', order: 2, exercise: exercises.hidden, sets: [set({ actualWeightKg: 55 })] },
+        { exerciseId: 'warmup', order: 3, exercise: exercises.warmup, sets: [set({ type: 'warmup' })] },
+        { exerciseId: 'incomplete', order: 4, exercise: exercises.incomplete, sets: [set({ completed: false })] },
+        { exerciseId: 'missing-actual', order: 5, exercise: exercises.missingActual, sets: [set({ actualReps: null })] }
+      ]
+    }];
+
+    expect(getProgressExercises(history)).toEqual([exercises.valid, exercises.hidden]);
+  });
+});
 
 describe('getTabTitle', () => {
   it('matches the visible tab labels', () => {
