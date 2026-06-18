@@ -6,6 +6,7 @@ import {
   getDragAutoScrollDelta,
   getDashboardStripVisible,
   getProgressExercises,
+  isKeyboardEditingElement,
   reorderTemplateExercises,
   getSavedTemplateExercises,
   getTabTitle,
@@ -85,6 +86,15 @@ describe('getBottomControlsHidden', () => {
 
   it('keeps bottom controls visible when there is no keyboard signal or focused editor', () => {
     expect(getBottomControlsHidden({ isKeyboardOpen: false, isEditableFocused: false })).toBe(false);
+  });
+});
+
+describe('isKeyboardEditingElement', () => {
+  it('excludes native selects while keeping keyboard editors', () => {
+    expect(isKeyboardEditingElement({ tagName: 'INPUT', isContentEditable: false })).toBe(true);
+    expect(isKeyboardEditingElement({ tagName: 'TEXTAREA', isContentEditable: false })).toBe(true);
+    expect(isKeyboardEditingElement({ tagName: 'DIV', isContentEditable: true })).toBe(true);
+    expect(isKeyboardEditingElement({ tagName: 'SELECT', isContentEditable: false })).toBe(false);
   });
 });
 

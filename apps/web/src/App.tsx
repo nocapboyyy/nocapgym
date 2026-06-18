@@ -102,9 +102,16 @@ export function getProgressExercises(history: WorkoutSession[]): Exercise[] {
   return [...exercisesById.values()].sort((left, right) => left.name.localeCompare(right.name, 'ru'));
 }
 
+export function isKeyboardEditingElement(input: { tagName: string; isContentEditable: boolean }) {
+  return input.tagName === 'INPUT' || input.tagName === 'TEXTAREA' || input.isContentEditable;
+}
+
 function isEditableElement(element: Element | null) {
   if (!(element instanceof HTMLElement)) return false;
-  return element.matches('input, textarea, select, [contenteditable="true"]');
+  return isKeyboardEditingElement({
+    tagName: element.tagName,
+    isContentEditable: element.isContentEditable
+  });
 }
 
 const emptyTemplate = (): Partial<WorkoutTemplate> & { exercises: TemplateExercise[] } => ({
