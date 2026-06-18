@@ -77,9 +77,41 @@ export function getHistorySessionPlanTitle(input: { template?: Pick<WorkoutTempl
   return input.template?.name?.trim() || 'План не найден';
 }
 
+export function getProgressExercises(history: WorkoutSession[]): Exercise[] {
+  const exercisesById = new Map<string, Exercise>();
+
+  for (const session of history) {
+    if (session.status !== 'completed') continue;
+
+    for (const sessionExercise of session.exercises) {
+      if (
+        sessionExercise.exercise &&
+        sessionExercise.sets.some(
+          (set) =>
+            set.type === 'working' &&
+            set.completed &&
+            set.actualWeightKg !== null &&
+            set.actualReps !== null
+        )
+      ) {
+        exercisesById.set(sessionExercise.exerciseId, sessionExercise.exercise);
+      }
+    }
+  }
+
+  return [...exercisesById.values()].sort((left, right) => left.name.localeCompare(right.name, 'ru'));
+}
+
+export function isKeyboardEditingElement(input: { tagName: string; isContentEditable: boolean }) {
+  return input.tagName === 'INPUT' || input.tagName === 'TEXTAREA' || input.isContentEditable;
+}
+
 function isEditableElement(element: Element | null) {
   if (!(element instanceof HTMLElement)) return false;
-  return element.matches('input, textarea, select, [contenteditable="true"]');
+  return isKeyboardEditingElement({
+    tagName: element.tagName,
+    isContentEditable: element.isContentEditable
+  });
 }
 
 const emptyTemplate = (): Partial<WorkoutTemplate> & { exercises: TemplateExercise[] } => ({
@@ -460,7 +492,6 @@ export function App() {
 
       {tab === 'history' && (
         <HistoryPanel
-          exercises={exercises}
           history={history}
           progress={progress}
           selectedExerciseId={selectedProgressExerciseId}
@@ -1140,7 +1171,6 @@ function SessionPanel(props: {
 }
 
 function HistoryPanel(props: {
-  exercises: Exercise[];
   history: WorkoutSession[];
   progress: ProgressPoint[];
   selectedExerciseId: string;
@@ -1149,6 +1179,8 @@ function HistoryPanel(props: {
   onExport: () => void;
   onImport: (file: File) => void;
 }) {
+  const progressExercises = useMemo(() => getProgressExercises(props.history), [props.history]);
+
   return (
     <section className="stack">
       <section className="panel">
@@ -1176,7 +1208,7 @@ function HistoryPanel(props: {
         <h2>Прогресс</h2>
         <select value={props.selectedExerciseId} onChange={(event) => props.onSelectExercise(event.target.value)}>
           <option value="">Выберите упражнение</option>
-          {props.exercises.map((exercise) => (
+          {progressExercises.map((exercise) => (
             <option key={exercise.id} value={exercise.id}>
               {exercise.name}
             </option>
