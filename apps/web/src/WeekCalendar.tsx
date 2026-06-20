@@ -28,7 +28,11 @@ export function WeekCalendar({ history, now = new Date() }: WeekCalendarProps) {
               <time dateTime={day.dateKey}>{day.dayNumber}</time>
               <span className="week-calendar-weekday">{day.weekdayLabel}</span>
               {day.hasWorkout ? (
-                <span className="week-calendar-workout" aria-label={`Тренировка: ${day.accessibleLabel}`}>
+                <span
+                  className="week-calendar-workout"
+                  role="img"
+                  aria-label={`Тренировка: ${day.accessibleLabel}`}
+                >
                   <Dumbbell size={14} strokeWidth={2.2} aria-hidden="true" />
                 </span>
               ) : (

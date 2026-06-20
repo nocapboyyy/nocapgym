@@ -4,7 +4,7 @@ import type { WorkoutSession } from './types';
 import { WeekCalendar } from './WeekCalendar';
 
 describe('WeekCalendar', () => {
-  it('renders the current week with month boundaries, today, and an accessible workout marker', () => {
+  it('renders the current week with month boundaries, today, and accessible workout markers', () => {
     const history: WorkoutSession[] = [
       {
         id: 'completed-monday',
@@ -22,8 +22,13 @@ describe('WeekCalendar', () => {
 
     expect(markup).toContain('aria-label="Текущая неделя"');
     expect(markup).toContain('<h2>Июль</h2>');
-    expect(markup).toContain('class="week-calendar-day outside-month"');
-    expect(markup).toContain('class="week-calendar-day today"');
-    expect(markup).toContain('aria-label="Тренировка: понедельник, 29 июня"');
+    expect(markup).toMatch(/class="(?=[^"]*week-calendar-day)(?=[^"]*outside-month)[^"]*"/);
+    expect(markup).toMatch(/class="(?=[^"]*week-calendar-day)(?=[^"]*today)[^"]*"/);
+    expect(markup).toMatch(
+      /<span(?=[^>]*class="[^"]*week-calendar-workout[^"]*")(?=[^>]*role="img")(?=[^>]*aria-label="Тренировка: понедельник, 29 июня")[^>]*>/
+    );
+    expect(markup).toMatch(
+      /<span(?=[^>]*class="[^"]*week-calendar-workout-placeholder[^"]*")(?=[^>]*aria-hidden="true")[^>]*>/
+    );
   });
 });
