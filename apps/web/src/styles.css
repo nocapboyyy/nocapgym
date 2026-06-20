@@ -426,6 +426,62 @@ h3 {
   font-weight: 780;
 }
 
+.card.session-exercise-card {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.session-exercise-header {
+  width: 100%;
+  min-height: 44px;
+  justify-content: flex-start;
+  border-radius: 8px;
+  padding: 13px 14px;
+  color: var(--text);
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+}
+
+.session-exercise-header:focus-visible {
+  outline: 2px solid var(--powder-blush);
+  outline-offset: -2px;
+}
+
+.session-exercise-title {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 780;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exercise-complete-indicator {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  color: var(--powder-blush);
+}
+
+.session-exercise-chevron {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: var(--almond-silk);
+  transition: transform 180ms ease;
+}
+
+.session-exercise-header[aria-expanded='true'] .session-exercise-chevron {
+  transform: rotate(180deg);
+}
+
+.session-exercise-content {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding: 12px 14px 14px;
+}
+
 .compact-list,
 .progress-list {
   display: flex;

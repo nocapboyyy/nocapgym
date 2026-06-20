@@ -24,3 +24,14 @@ describe('finish-panel layout', () => {
     expect(source).not.toContain('.app-shell.bottom-controls-hidden .finish-panel');
   });
 });
+
+describe('active workout exercise disclosure', () => {
+  it('uses the project palette for the completion indicator and a full touch target header', () => {
+    const header = cssRule('.session-exercise-header');
+    const indicator = cssRule('.exercise-complete-indicator');
+
+    expect(header).toContain('min-height: 44px');
+    expect(indicator).toContain('var(--powder-blush)');
+    expect(indicator).not.toContain('green');
+  });
+});

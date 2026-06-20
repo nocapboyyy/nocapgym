@@ -4,6 +4,8 @@ import {
   Activity,
   ArrowLeft,
   Check,
+  ChevronDown,
+  CircleCheck,
   Dumbbell,
   GripVertical,
   History,
@@ -75,6 +77,33 @@ export function getDashboardStripVisible(tab: Tab) {
 
 export function getHistorySessionPlanTitle(input: { template?: Pick<WorkoutTemplate, 'id' | 'name'> | null }) {
   return input.template?.name?.trim() || 'План не найден';
+}
+
+export function isSessionExerciseComplete(exercise: Pick<SessionExercise, 'sets'>) {
+  return exercise.sets.length > 0 && exercise.sets.every((set) => set.completed);
+}
+
+export function getInitialExerciseDisclosureState(count: number) {
+  return Array.from({ length: count }, (_, index) => index === 0);
+}
+
+export function toggleExerciseDisclosureState(state: boolean[], index: number) {
+  return state.map((isExpanded, currentIndex) => (currentIndex === index ? !isExpanded : isExpanded));
+}
+
+export function appendExpandedExerciseDisclosureState(state: boolean[]) {
+  return [...state, true];
+}
+
+export function removeExerciseDisclosureState(state: boolean[], index: number) {
+  return state.filter((_, currentIndex) => currentIndex !== index);
+}
+
+export function getSessionExerciseTitle(
+  exercise: Pick<SessionExercise, 'exerciseId' | 'exercise'>,
+  exercises: Exercise[]
+) {
+  return exercises.find((item) => item.id === exercise.exerciseId)?.name ?? exercise.exercise?.name ?? 'Упражнение';
 }
 
 export function getProgressExercises(history: WorkoutSession[]): Exercise[] {
@@ -1014,6 +1043,14 @@ function SessionPanel(props: {
   setSession: (session: WorkoutSession | null) => void;
   onComplete: (applyToTemplate: boolean) => void;
 }) {
+  const [expandedExercises, setExpandedExercises] = useState(() =>
+    getInitialExerciseDisclosureState(props.session?.exercises.length ?? 0)
+  );
+
+  useEffect(() => {
+    setExpandedExercises(getInitialExerciseDisclosureState(props.session?.exercises.length ?? 0));
+  }, [props.session?.id]);
+
   if (!props.session) {
     return <section className="panel empty">Запустите тренировку из вкладки «Планы».</section>;
   }
@@ -1038,100 +1075,126 @@ function SessionPanel(props: {
         <h2>Текущая тренировка</h2>
       </div>
 
-      {props.session.exercises.map((exercise, exerciseIndex) => (
-        <article className="card" key={`${exercise.exerciseId}-${exerciseIndex}`}>
-          <div className="row">
-            <select value={exercise.exerciseId} onChange={(event) => updateExercise(exerciseIndex, { exerciseId: event.target.value })}>
-              {props.exercises.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
+      {props.session.exercises.map((exercise, exerciseIndex) => {
+        const isExpanded = expandedExercises[exerciseIndex] ?? false;
+
+        return (
+          <article className="card session-exercise-card" key={`${exercise.exerciseId}-${exerciseIndex}`}>
             <button
-              className="icon-button"
-              aria-label="Удалить упражнение"
+              className="session-exercise-header"
+              aria-expanded={isExpanded}
               onClick={() =>
-                props.setSession({
-                  ...props.session!,
-                  exercises: props.session!.exercises.filter((_, index) => index !== exerciseIndex)
-                })
+                setExpandedExercises((state) => toggleExerciseDisclosureState(state, exerciseIndex))
               }
             >
-              <Trash2 size={18} />
+              <span className="session-exercise-title">{getSessionExerciseTitle(exercise, props.exercises)}</span>
+              {isSessionExerciseComplete(exercise) && (
+                <span className="exercise-complete-indicator" aria-label="Все подходы выполнены">
+                  <CircleCheck size={17} />
+                </span>
+              )}
+              <ChevronDown className="session-exercise-chevron" size={20} aria-hidden="true" />
             </button>
-          </div>
 
-          {exercise.sets.map((set, setIndex) => (
-            <div className="set-row session-set" key={setIndex}>
-              <select value={set.type} onChange={(event) => updateSet(exerciseIndex, setIndex, { type: event.target.value as SessionSet['type'] })}>
-                <option value="warmup">Разм.</option>
-                <option value="working">Раб.</option>
-              </select>
-              <label className="unit-field">
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  step="0.5"
-                  placeholder="0 кг"
-                  value={numberInputValue(set.actualWeightKg)}
-                  onChange={(event) =>
-                    updateSet(exerciseIndex, setIndex, { actualWeightKg: parseNumberInput(event.target.value) })
-                  }
-                />
-                <span>кг</span>
-              </label>
-              <label className="unit-field">
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  step="1"
-                  placeholder="0 п."
-                  value={numberInputValue(set.actualReps)}
-                  onChange={(event) =>
-                    updateSet(exerciseIndex, setIndex, { actualReps: parseNumberInput(event.target.value) })
-                  }
-                />
-                <span>п.</span>
-              </label>
-              <button
-                className={set.completed ? 'icon-button done' : 'icon-button'}
-                aria-label="Отметить подход"
-                onClick={() => updateSet(exerciseIndex, setIndex, { completed: !set.completed })}
-              >
-                <Check size={18} />
-              </button>
-            </div>
-          ))}
+            {isExpanded && (
+              <div className="session-exercise-content">
+                <div className="row">
+                  <select value={exercise.exerciseId} onChange={(event) => updateExercise(exerciseIndex, { exerciseId: event.target.value })}>
+                    {props.exercises.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className="icon-button"
+                    aria-label="Удалить упражнение"
+                    onClick={() => {
+                      setExpandedExercises((state) => removeExerciseDisclosureState(state, exerciseIndex));
+                      props.setSession({
+                        ...props.session!,
+                        exercises: props.session!.exercises.filter((_, index) => index !== exerciseIndex)
+                      });
+                    }}
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
 
-          <button
-            className="secondary"
-            onClick={() =>
-              updateExercise(exerciseIndex, {
-                sets: [
-                  ...exercise.sets,
-                  {
-                    type: 'working',
-                    plannedWeightKg: null,
-                    plannedReps: null,
-                    actualWeightKg: 0,
-                    actualReps: 8,
-                    completed: false,
-                    order: exercise.sets.length
+                {exercise.sets.map((set, setIndex) => (
+                  <div className="set-row session-set" key={setIndex}>
+                    <select value={set.type} onChange={(event) => updateSet(exerciseIndex, setIndex, { type: event.target.value as SessionSet['type'] })}>
+                      <option value="warmup">Разм.</option>
+                      <option value="working">Раб.</option>
+                    </select>
+                    <label className="unit-field">
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step="0.5"
+                        placeholder="0 кг"
+                        value={numberInputValue(set.actualWeightKg)}
+                        onChange={(event) =>
+                          updateSet(exerciseIndex, setIndex, { actualWeightKg: parseNumberInput(event.target.value) })
+                        }
+                      />
+                      <span>кг</span>
+                    </label>
+                    <label className="unit-field">
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        step="1"
+                        placeholder="0 п."
+                        value={numberInputValue(set.actualReps)}
+                        onChange={(event) =>
+                          updateSet(exerciseIndex, setIndex, { actualReps: parseNumberInput(event.target.value) })
+                        }
+                      />
+                      <span>п.</span>
+                    </label>
+                    <button
+                      className={set.completed ? 'icon-button done' : 'icon-button'}
+                      aria-label="Отметить подход"
+                      onClick={() => updateSet(exerciseIndex, setIndex, { completed: !set.completed })}
+                    >
+                      <Check size={18} />
+                    </button>
+                  </div>
+                ))}
+
+                <button
+                  className="secondary"
+                  onClick={() =>
+                    updateExercise(exerciseIndex, {
+                      sets: [
+                        ...exercise.sets,
+                        {
+                          type: 'working',
+                          plannedWeightKg: null,
+                          plannedReps: null,
+                          actualWeightKg: 0,
+                          actualReps: 8,
+                          completed: false,
+                          order: exercise.sets.length
+                        }
+                      ]
+                    })
                   }
-                ]
-              })
-            }
-          >
-            <Plus size={16} /> Подход
-          </button>
-        </article>
-      ))}
+                >
+                  <Plus size={16} /> Подход
+                </button>
+              </div>
+            )}
+          </article>
+        );
+      })}
 
       <button
         className="secondary"
         disabled={props.exercises.length === 0}
-        onClick={() =>
+        onClick={() => {
+          setExpandedExercises((state) => appendExpandedExerciseDisclosureState(state));
           props.setSession({
             ...props.session!,
             exercises: [
@@ -1152,8 +1215,8 @@ function SessionPanel(props: {
                 ]
               }
             ]
-          })
-        }
+          });
+        }}
       >
         <ListPlus size={18} /> Добавить упражнение
       </button>
