@@ -9,4 +9,14 @@ describe('SessionPanel source', () => {
     expect(source).not.toContain('Тренировка сохранена');
     expect(source).not.toContain('onSave={() => saveSession()}');
   });
+
+  it('renders accessible exercise disclosures and the completion indicator', () => {
+    const source = readFileSync(resolve(__dirname, 'App.tsx'), 'utf8');
+
+    expect(source).toContain('aria-expanded={isExpanded}');
+    expect(source).toContain('session-exercise-header');
+    expect(source).toContain('session-exercise-content');
+    expect(source).toContain('exercise-complete-indicator');
+    expect(source).toContain('isSessionExerciseComplete(exercise)');
+  });
 });

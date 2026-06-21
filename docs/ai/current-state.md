@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-06-15
+Last updated: 2026-06-21
 
 ## Working Features
 
@@ -13,7 +13,7 @@ Last updated: 2026-06-15
 - Plan exercises can be reordered in the wizard summary by dragging a handle.
 - Exercise drag reorder temporarily disables Telegram vertical swipes to prevent Mini App collapse.
 - The plan exercise summary keeps fixed-height cards and auto-scrolls while dragging through long lists.
-- Active workout screen with editable exercises and sets.
+- Active workout screen with editable exercises and sets. Exercise cards are independently collapsible, the first card opens initially, and a palette-aligned indicator marks exercises whose sets are all complete.
 - Workout completion with optional template update.
 - Completed workout history.
 - History workout cards show the source plan name instead of a generic stats icon.

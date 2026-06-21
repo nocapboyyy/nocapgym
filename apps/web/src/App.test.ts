@@ -1,18 +1,77 @@
 import { describe, expect, it } from 'vitest';
 import {
+  appendExpandedExerciseDisclosureState,
   getBottomControlsHidden,
   getHistorySessionPlanTitle,
+  getInitialExerciseDisclosureState,
   getKeyboardViewportState,
   getDragAutoScrollDelta,
   getDashboardStripVisible,
   getProgressExercises,
+  getSessionExerciseTitle,
+  isSessionExerciseComplete,
   isKeyboardEditingElement,
+  removeExerciseDisclosureState,
   reorderTemplateExercises,
   getSavedTemplateExercises,
   getTabTitle,
-  getNextTemplateSet
+  getNextTemplateSet,
+  toggleExerciseDisclosureState
 } from './App';
 import type { Exercise, SessionSet, WorkoutSession } from './types';
+
+describe('isSessionExerciseComplete', () => {
+  const set = (completed: boolean): SessionSet => ({
+    type: 'working',
+    plannedWeightKg: null,
+    plannedReps: null,
+    actualWeightKg: 50,
+    actualReps: 8,
+    completed,
+    order: 0
+  });
+
+  it('requires at least one set', () => {
+    expect(isSessionExerciseComplete({ sets: [] })).toBe(false);
+  });
+
+  it('requires every existing set to be complete', () => {
+    expect(isSessionExerciseComplete({ sets: [set(true), set(false)] })).toBe(false);
+    expect(isSessionExerciseComplete({ sets: [set(true), set(true)] })).toBe(true);
+  });
+});
+
+describe('active workout disclosure state', () => {
+  it('opens only the first exercise initially', () => {
+    expect(getInitialExerciseDisclosureState(3)).toEqual([true, false, false]);
+    expect(getInitialExerciseDisclosureState(0)).toEqual([]);
+  });
+
+  it('toggles cards independently', () => {
+    expect(toggleExerciseDisclosureState([true, false, true], 1)).toEqual([true, true, true]);
+  });
+
+  it('opens a newly appended exercise', () => {
+    expect(appendExpandedExerciseDisclosureState([true, false])).toEqual([true, false, true]);
+  });
+
+  it('removes only the matching disclosure entry', () => {
+    expect(removeExerciseDisclosureState([true, false, true], 1)).toEqual([true, true]);
+  });
+});
+
+describe('getSessionExerciseTitle', () => {
+  it('uses the currently selected catalog exercise before stale embedded data', () => {
+    const oldExercise: Exercise = {
+      id: 'bench', name: 'Жим лёжа', muscleGroup: 'Грудь', equipment: 'Штанга', techniqueNote: null, isHidden: false
+    };
+    const selectedExercise: Exercise = {
+      id: 'squat', name: 'Присед', muscleGroup: 'Ноги', equipment: 'Штанга', techniqueNote: null, isHidden: false
+    };
+
+    expect(getSessionExerciseTitle({ exerciseId: 'squat', exercise: oldExercise }, [oldExercise, selectedExercise])).toBe('Присед');
+  });
+});
 
 describe('getProgressExercises', () => {
   it('returns unique history exercises with completed working progress sorted by name', () => {
