@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { api } from './api';
 import { initTelegramApp, setTelegramVerticalSwipesEnabled } from './telegram';
+import { WeekCalendar } from './WeekCalendar';
 import type {
   Exercise,
   ProgressPoint,
@@ -71,8 +72,8 @@ export function getBottomControlsHidden(input: { isKeyboardOpen: boolean; isEdit
   return input.isKeyboardOpen || input.isEditableFocused;
 }
 
-export function getDashboardStripVisible(tab: Tab) {
-  return tab !== 'admin';
+export function getPlansCalendarVisible(tab: Tab) {
+  return tab === 'templates';
 }
 
 export function getHistorySessionPlanTitle(input: { template?: Pick<WorkoutTemplate, 'id' | 'name'> | null }) {
@@ -421,9 +422,6 @@ export function App() {
     ],
     [isAdmin]
   );
-  const completedSessionsCount = history.length;
-  const plannedExercisesCount = templates.reduce((total, template) => total + template.exercises.length, 0);
-  const activeSetsCount = activeSession?.exercises.reduce((total, exercise) => total + exercise.sets.length, 0) ?? 0;
   const bottomControlsHidden = getBottomControlsHidden({ isKeyboardOpen: keyboardOpen, isEditableFocused: editableFocused });
 
   if (loading) {
@@ -455,26 +453,7 @@ export function App() {
         ))}
       </nav>
 
-      {getDashboardStripVisible(tab) && (
-        <section className="dashboard-strip" aria-label="Сводка">
-          <div>
-            <span className="metric-label">Планы</span>
-            <strong>{templates.length}</strong>
-          </div>
-          <div>
-            <span className="metric-label">В плане</span>
-            <strong>{plannedExercisesCount}</strong>
-          </div>
-          <div>
-            <span className="metric-label">История</span>
-            <strong>{completedSessionsCount}</strong>
-          </div>
-          <div>
-            <span className="metric-label">Сейчас</span>
-            <strong>{activeSetsCount}</strong>
-          </div>
-        </section>
-      )}
+      {getPlansCalendarVisible(tab) && <WeekCalendar history={history} />}
 
       {tab === 'templates' && (
         <TemplatePanel

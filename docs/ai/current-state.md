@@ -17,7 +17,9 @@ Last updated: 2026-06-21
 - Workout completion with optional template update.
 - Completed workout history.
 - History workout cards show the source plan name instead of a generic stats icon.
-- The dashboard summary strip is hidden on the Admin tab.
+- The Plans tab replaces the former four-metric summary strip with a static Monday-Sunday current-week calendar.
+- Completed workouts are marked by local start date; adjacent-month days remain visible but muted.
+- The shared summary strip is no longer shown on Gym or History.
 - Per-exercise progress from working sets.
 - User JSON export/import.
 - Admin exercise management.

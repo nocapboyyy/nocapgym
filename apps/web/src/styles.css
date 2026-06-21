@@ -254,34 +254,73 @@ h3 {
   font-size: 16px;
 }
 
-.dashboard-strip {
+.week-calendar {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: 12px;
   margin: 14px 0;
-}
-
-.dashboard-strip > div {
-  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 10px 9px;
+  padding: 12px;
   background: var(--panel);
 }
 
-.metric-label {
+.week-calendar h2 {
+  font-size: 17px;
+}
+
+.week-calendar-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.week-calendar-day {
+  min-width: 0;
+  border-radius: 8px;
+  padding: 7px 2px;
+  color: var(--text);
+  text-align: center;
+}
+
+.week-calendar-day.outside-month {
+  color: var(--muted);
+}
+
+.week-calendar-day.today {
+  color: #140f0f;
+  background: var(--powder-blush);
+}
+
+.week-calendar-day time {
   display: block;
-  color: var(--soft);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.week-calendar-weekday {
+  display: block;
+  margin-top: 4px;
   font-size: 11px;
   font-weight: 750;
 }
 
-.dashboard-strip strong {
-  display: block;
-  margin-top: 4px;
-  color: var(--seashell);
-  font-size: 20px;
-  line-height: 1;
+.week-calendar-workout,
+.week-calendar-workout-placeholder {
+  display: flex;
+  width: 16px;
+  height: 16px;
+  margin: 7px auto 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.week-calendar-workout {
+  color: var(--powder-petal);
+}
+
+.week-calendar-day.today .week-calendar-workout {
+  color: #140f0f;
 }
 
 .stack {
@@ -847,10 +886,6 @@ h3 {
 @media (max-width: 430px) {
   .app-shell {
     padding: 16px 12px calc(136px + env(safe-area-inset-bottom, 0px));
-  }
-
-  .dashboard-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .tabbar {
