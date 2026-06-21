@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { api } from './api';
 import { initTelegramApp, setTelegramVerticalSwipesEnabled } from './telegram';
+import { MonthCalendar } from './MonthCalendar';
 import { WeekCalendar } from './WeekCalendar';
 import type {
   Exercise,
@@ -1225,6 +1226,8 @@ function HistoryPanel(props: {
 
   return (
     <section className="stack">
+      <MonthCalendar history={props.history} />
+
       <section className="panel">
         <h2>Backup</h2>
         <div className="actions">
