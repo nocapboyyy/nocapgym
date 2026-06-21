@@ -506,8 +506,6 @@ export function App() {
           selectedExerciseId={selectedProgressExerciseId}
           onSelectExercise={loadProgress}
           onDeleteSession={deleteHistorySession}
-          onExport={exportBackup}
-          onImport={importBackup}
         />
       )}
 
@@ -1213,41 +1211,18 @@ function SessionPanel(props: {
   );
 }
 
-function HistoryPanel(props: {
+export function HistoryPanel(props: {
   history: WorkoutSession[];
   progress: ProgressPoint[];
   selectedExerciseId: string;
   onSelectExercise: (id: string) => void;
   onDeleteSession: (id: string) => void;
-  onExport: () => void;
-  onImport: (file: File) => void;
 }) {
   const progressExercises = useMemo(() => getProgressExercises(props.history), [props.history]);
 
   return (
     <section className="stack">
       <MonthCalendar history={props.history} />
-
-      <section className="panel">
-        <h2>Backup</h2>
-        <div className="actions">
-          <button onClick={props.onExport}>
-            <Save size={18} /> Экспорт JSON
-          </button>
-          <label className="file-button">
-            Импорт JSON
-            <input
-              type="file"
-              accept="application/json"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void props.onImport(file);
-                event.currentTarget.value = '';
-              }}
-            />
-          </label>
-        </div>
-      </section>
 
       <section className="panel">
         <h2>Прогресс</h2>
