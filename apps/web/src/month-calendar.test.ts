@@ -87,8 +87,8 @@ describe('getAdjacentMonth', () => {
 
 describe('getHorizontalSwipeDelta', () => {
   it('returns the horizontal direction for decisive swipes', () => {
-    expect(getHorizontalSwipeDelta({ startX: 100, startY: 50, endX: 55, endY: 55 })).toBe(-1);
-    expect(getHorizontalSwipeDelta({ startX: 55, startY: 50, endX: 100, endY: 45 })).toBe(1);
+    expect(getHorizontalSwipeDelta({ startX: 100, startY: 50, endX: 55, endY: 55 })).toBe(1);
+    expect(getHorizontalSwipeDelta({ startX: 55, startY: 50, endX: 100, endY: 45 })).toBe(-1);
   });
 
   it('ignores short and predominantly vertical gestures', () => {

@@ -53,7 +53,7 @@ export function getHorizontalSwipeDelta(coordinates: SwipeCoordinates): -1 | 0 |
     return 0;
   }
 
-  return horizontalDistance < 0 ? -1 : 1;
+  return horizontalDistance < 0 ? 1 : -1;
 }
 
 export function buildMonthCalendar(
