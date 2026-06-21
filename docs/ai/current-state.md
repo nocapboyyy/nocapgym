@@ -22,7 +22,7 @@ Last updated: 2026-06-21
 - Completed workouts are marked by local start date; adjacent-month days remain visible but muted.
 - The shared summary strip is no longer shown on Gym or History.
 - Per-exercise progress from working sets.
-- User JSON export/import.
+- User JSON export/import remains supported by frontend logic and API, but its controls are temporarily hidden from the History UI.
 - Admin exercise management.
 - Exercise hiding instead of hard delete as the preferred catalog flow.
 - Delete completed workout from history.
