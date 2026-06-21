@@ -84,3 +84,56 @@ describe('week calendar layout', () => {
     }
   });
 });
+
+describe('month calendar layout', () => {
+  it('preserves vertical scrolling while handling horizontal month swipes', () => {
+    const rule = cssRule('.month-calendar');
+    const panelRule = cssRule('.month-calendar.panel');
+
+    expect(rule).toContain('touch-action: pan-y');
+    expect(rule).toContain('overflow: hidden');
+    expect(panelRule).toContain('gap: 6px');
+    expect(panelRule).toContain('padding: 10px');
+  });
+
+  it('uses accessible navigation targets and a centered compact title', () => {
+    const navigation = cssRule('.month-calendar-navigation');
+    const title = cssRule('.month-calendar-header h2');
+
+    expect(navigation).toContain('min-width: 44px');
+    expect(navigation).toContain('min-height: 44px');
+    expect(title).toContain('font-size: 17px');
+    expect(title).toContain('text-align: center');
+  });
+
+  it('keeps weekdays and days in seven equal columns and six stable rows', () => {
+    const weekdays = cssRule('.month-calendar-weekdays');
+    const days = cssRule('.month-calendar-days');
+
+    expect(weekdays).toContain('grid-template-columns: repeat(7, minmax(0, 1fr))');
+    expect(days).toContain('grid-template-columns: repeat(7, minmax(0, 1fr))');
+    expect(days).toContain('grid-template-rows: repeat(6, 32px)');
+  });
+
+  it('uses compact workout dots from the project palette', () => {
+    const workout = cssRule('.month-calendar-workout');
+    const placeholder = cssRule('.month-calendar-workout-placeholder');
+
+    for (const rule of [workout, placeholder]) {
+      expect(rule).toContain('width: 4px');
+      expect(rule).toContain('height: 4px');
+    }
+    expect(workout).toContain('background: var(--powder-petal)');
+  });
+
+  it('softens adjacent-month days and keeps today readable', () => {
+    const outside = cssRule('.month-calendar-day.outside-month');
+    const today = cssRule('.month-calendar-day.today');
+    const todayWorkout = cssRule('.month-calendar-day.today .month-calendar-workout');
+
+    expect(outside).toContain('color: var(--muted)');
+    expect(today).toContain('background: var(--powder-blush)');
+    expect(today).toContain('color: #140f0f');
+    expect(todayWorkout).toContain('background: #140f0f');
+  });
+});
