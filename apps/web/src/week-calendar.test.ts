@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkoutSession } from './types';
-import { buildCurrentWeek, formatCurrentMonth } from './week-calendar';
+import {
+  buildCurrentWeek,
+  formatCurrentMonth,
+  millisecondsUntilNextLocalDay,
+  startLiveDayRefresh,
+  type LiveDayRefreshEnvironment
+} from './week-calendar';
 
 type HistoryItem = Pick<WorkoutSession, 'id' | 'startedAt' | 'status'>;
 
@@ -79,5 +85,105 @@ describe('buildCurrentWeek', () => {
 describe('formatCurrentMonth', () => {
   it('formats the current month in Russian', () => {
     expect(formatCurrentMonth(new Date(2026, 6, 1, 12))).toBe('Июль');
+  });
+});
+
+describe('millisecondsUntilNextLocalDay', () => {
+  it('returns the remaining milliseconds before the next local day', () => {
+    expect(millisecondsUntilNextLocalDay(new Date(2026, 6, 5, 23, 59, 59, 500))).toBe(500);
+    expect(millisecondsUntilNextLocalDay(new Date(2026, 6, 5, 12))).toBe(12 * 60 * 60 * 1_000);
+  });
+
+  it('uses local calendar boundaries across daylight saving transitions', () => {
+    const originalTimeZone = process.env.TZ;
+
+    try {
+      process.env.TZ = 'America/New_York';
+
+      expect(millisecondsUntilNextLocalDay(new Date(2026, 2, 8))).toBe(23 * 60 * 60 * 1_000);
+    } finally {
+      if (originalTimeZone === undefined) {
+        delete process.env.TZ;
+      } else {
+        process.env.TZ = originalTimeZone;
+      }
+    }
+  });
+});
+
+describe('startLiveDayRefresh', () => {
+  it('refreshes immediately and maintains one rescheduled timer until cleanup', () => {
+    let current = new Date(2026, 6, 5, 12);
+    let visible = true;
+    let nextTimerId = 1;
+    const timers = new Map<number, { callback: () => void; delay: number }>();
+    const clearedTimerIds: number[] = [];
+    let focusListener: (() => void) | undefined;
+    let visibilityListener: (() => void) | undefined;
+    const unsubscribed: string[] = [];
+    const refreshedAt: Date[] = [];
+    const environment: LiveDayRefreshEnvironment = {
+      now: () => current,
+      setTimeout: (callback, delay) => {
+        const id = nextTimerId++;
+        timers.set(id, { callback, delay });
+        return id;
+      },
+      clearTimeout: (id) => {
+        clearedTimerIds.push(id);
+        timers.delete(id);
+      },
+      subscribeFocus: (listener) => {
+        focusListener = listener;
+      },
+      unsubscribeFocus: (listener) => {
+        expect(listener).toBe(focusListener);
+        unsubscribed.push('focus');
+      },
+      subscribeVisibility: (listener) => {
+        visibilityListener = listener;
+      },
+      unsubscribeVisibility: (listener) => {
+        expect(listener).toBe(visibilityListener);
+        unsubscribed.push('visibility');
+      },
+      isVisible: () => visible
+    };
+
+    const cleanup = startLiveDayRefresh((date) => refreshedAt.push(date), environment);
+
+    expect(refreshedAt).toEqual([current]);
+    expect([...timers.values()].map((timer) => timer.delay)).toEqual([12 * 60 * 60 * 1_000 + 50]);
+
+    current = new Date(2026, 6, 5, 13);
+    focusListener?.();
+    expect(refreshedAt).toHaveLength(2);
+    expect(clearedTimerIds).toEqual([1]);
+    expect(timers.size).toBe(1);
+
+    visible = false;
+    visibilityListener?.();
+    expect(refreshedAt).toHaveLength(2);
+    expect(timers.size).toBe(1);
+
+    visible = true;
+    current = new Date(2026, 6, 5, 14);
+    visibilityListener?.();
+    expect(refreshedAt).toHaveLength(3);
+    expect(clearedTimerIds).toEqual([1, 2]);
+    expect(timers.size).toBe(1);
+
+    current = new Date(2026, 6, 6, 0, 0, 0, 50);
+    const [pendingTimerId, pendingTimer] = [...timers.entries()][0];
+    timers.delete(pendingTimerId);
+    pendingTimer.callback();
+    expect(refreshedAt).toHaveLength(4);
+    expect(refreshedAt.at(-1)).toEqual(current);
+    expect(timers.size).toBe(1);
+
+    cleanup();
+    expect(clearedTimerIds).toEqual([1, 2, 4]);
+    expect(timers.size).toBe(0);
+    expect(unsubscribed).toEqual(['focus', 'visibility']);
   });
 });

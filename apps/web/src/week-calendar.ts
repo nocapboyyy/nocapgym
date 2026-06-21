@@ -13,6 +13,17 @@ export type WeekCalendarDay = {
   hasWorkout: boolean;
 };
 
+export type LiveDayRefreshEnvironment = {
+  now: () => Date;
+  setTimeout: (callback: () => void, delay: number) => number;
+  clearTimeout: (timeoutId: number) => void;
+  subscribeFocus: (listener: () => void) => void;
+  unsubscribeFocus: (listener: () => void) => void;
+  subscribeVisibility: (listener: () => void) => void;
+  unsubscribeVisibility: (listener: () => void) => void;
+  isVisible: () => boolean;
+};
+
 const WEEKDAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] as const;
 
 const monthFormatter = new Intl.DateTimeFormat('ru-RU', { month: 'long' });
@@ -34,6 +45,60 @@ export function formatCurrentMonth(now: Date): string {
   const month = monthFormatter.format(now);
 
   return month.charAt(0).toLocaleUpperCase('ru-RU') + month.slice(1);
+}
+
+export function millisecondsUntilNextLocalDay(now: Date): number {
+  const nextLocalMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+  return Math.max(1, nextLocalMidnight.getTime() - now.getTime());
+}
+
+export function startLiveDayRefresh(
+  onRefresh: (now: Date) => void,
+  environment: LiveDayRefreshEnvironment
+): () => void {
+  let active = true;
+  let timeoutId: number | undefined;
+
+  const scheduleRefresh = (scheduledFrom: Date) => {
+    if (timeoutId !== undefined) {
+      environment.clearTimeout(timeoutId);
+    }
+
+    timeoutId = environment.setTimeout(() => {
+      timeoutId = undefined;
+      refresh();
+    }, millisecondsUntilNextLocalDay(scheduledFrom) + 50);
+  };
+
+  const refresh = () => {
+    if (!active) {
+      return;
+    }
+
+    const refreshed = environment.now();
+    onRefresh(refreshed);
+    scheduleRefresh(refreshed);
+  };
+
+  const handleVisibilityChange = () => {
+    if (environment.isVisible()) {
+      refresh();
+    }
+  };
+
+  refresh();
+  environment.subscribeFocus(refresh);
+  environment.subscribeVisibility(handleVisibilityChange);
+
+  return () => {
+    active = false;
+    if (timeoutId !== undefined) {
+      environment.clearTimeout(timeoutId);
+    }
+    environment.unsubscribeFocus(refresh);
+    environment.unsubscribeVisibility(handleVisibilityChange);
+  };
 }
 
 export function buildCurrentWeek(now: Date, history: HistoryItem[]): WeekCalendarDay[] {

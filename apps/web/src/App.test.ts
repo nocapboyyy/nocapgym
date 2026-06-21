@@ -4,7 +4,7 @@ import {
   getHistorySessionPlanTitle,
   getKeyboardViewportState,
   getDragAutoScrollDelta,
-  getDashboardStripVisible,
+  getPlansCalendarVisible,
   getProgressExercises,
   isKeyboardEditingElement,
   reorderTemplateExercises,
@@ -98,12 +98,12 @@ describe('isKeyboardEditingElement', () => {
   });
 });
 
-describe('getDashboardStripVisible', () => {
-  it('hides the dashboard strip on the admin tab only', () => {
-    expect(getDashboardStripVisible('templates')).toBe(true);
-    expect(getDashboardStripVisible('session')).toBe(true);
-    expect(getDashboardStripVisible('history')).toBe(true);
-    expect(getDashboardStripVisible('admin')).toBe(false);
+describe('getPlansCalendarVisible', () => {
+  it('shows the plans calendar on the templates tab only', () => {
+    expect(getPlansCalendarVisible('templates')).toBe(true);
+    expect(getPlansCalendarVisible('session')).toBe(false);
+    expect(getPlansCalendarVisible('history')).toBe(false);
+    expect(getPlansCalendarVisible('admin')).toBe(false);
   });
 });
 
