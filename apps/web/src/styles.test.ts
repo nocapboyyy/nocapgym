@@ -137,3 +137,80 @@ describe('month calendar layout', () => {
     expect(todayWorkout).toContain('background: #140f0f');
   });
 });
+
+describe('mobile navigation layout', () => {
+  it('distributes every visible tab across equal automatic columns above the safe area', () => {
+    const rule = cssRule('.tabbar');
+
+    expect(rule).toContain('grid-auto-flow: column');
+    expect(rule).toContain('grid-auto-columns: minmax(0, 1fr)');
+    expect(rule).toContain('env(safe-area-inset-bottom, 0px)');
+    expect(rule).not.toContain('repeat(4');
+  });
+
+  it('keeps persistent labels below their icons without changing the tab footprint', () => {
+    const rule = cssRule('.tabbar button');
+
+    expect(rule).toContain('flex-direction: column');
+    expect(rule).toContain('gap: 4px');
+    expect(rule).toContain('min-height: 56px');
+    expect(rule).toContain('font-size: 11px');
+  });
+
+  it('marks the active tab with color and a subtle background only', () => {
+    const rule = cssRule('.tabbar button.active');
+
+    expect(rule).toContain('color: var(--powder-petal)');
+    expect(rule).toContain('background: rgba(255, 181, 167, 0.12)');
+    expect(rule).not.toMatch(/(?:width|height|padding|font-size|font-weight|content)\s*:/);
+  });
+});
+
+describe('personalization and profile layout', () => {
+  it('provides a safe-area-aware centered onboarding card and large choices', () => {
+    const onboarding = cssRule('.gender-onboarding');
+    const card = cssRule('.gender-onboarding-card');
+    const options = cssRule('.gender-options');
+    const buttons = cssRule('.gender-options button');
+    const error = cssRule('.form-error');
+
+    expect(onboarding).toContain('min-height: 100dvh');
+    expect(onboarding).toContain('env(safe-area-inset-top, 0px)');
+    expect(onboarding).toContain('max(14px, env(safe-area-inset-left, 0px))');
+    expect(onboarding).toContain('max(14px, env(safe-area-inset-right, 0px))');
+    expect(onboarding).toContain('place-items: center');
+    expect(card).toContain('width: min(');
+    expect(options).toContain('display: grid');
+    expect(buttons).toContain('min-height: 52px');
+    expect(error).toContain('color: var(--danger)');
+  });
+
+  it('keeps the profile trigger and menu actions accessible', () => {
+    const anchor = cssRule('.topbar > div:last-child');
+    const profile = cssRule('.profile');
+    const menu = cssRule('.profile-menu');
+    const group = cssRule('.profile-gender-actions');
+    const actions = cssRule('.profile-menu button');
+    const selected = cssRule(".profile-menu-action[aria-pressed='true']");
+
+    expect(anchor).toContain('position: relative');
+    expect(profile).toContain('min-height: 44px');
+    expect(profile).toContain('display: inline-flex');
+    expect(menu).toContain('position: absolute');
+    expect(menu).toContain('right: 0');
+    expect(menu).toContain('width: min(210px,');
+    expect(menu).toContain('display: grid');
+    expect(group).toContain('display: grid');
+    expect(actions).toContain('min-height: 44px');
+    expect(selected).toContain('background: rgba(255, 181, 167, 0.12)');
+  });
+
+  it('centers the cycle placeholder and preserves an admin back touch target', () => {
+    const cycle = cssRule('.cycle-placeholder');
+    const adminBack = cssRule('.topbar .icon-button');
+
+    expect(cycle).toContain('min-height:');
+    expect(cycle).toContain('place-items: center');
+    expect(adminBack).toContain('min-height: 44px');
+  });
+});

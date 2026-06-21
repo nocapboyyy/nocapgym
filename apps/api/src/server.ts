@@ -6,6 +6,7 @@ import { registerAuth } from './auth/plugin.js';
 import { registerExerciseRoutes } from './routes/exercises.js';
 import { registerSessionRoutes } from './routes/sessions.js';
 import { registerTemplateRoutes } from './routes/templates.js';
+import { registerUserRoutes } from './routes/users.js';
 import type { AppContext } from './types.js';
 
 export async function buildServer(overrides: Partial<AppContext> = {}) {
@@ -31,6 +32,7 @@ export async function buildServer(overrides: Partial<AppContext> = {}) {
   await registerExerciseRoutes(app, context);
   await registerTemplateRoutes(app, context);
   await registerSessionRoutes(app, context);
+  await registerUserRoutes(app, context);
 
   app.setErrorHandler((error: unknown, _request, reply) => {
     if (error && typeof error === 'object' && 'issues' in error) {

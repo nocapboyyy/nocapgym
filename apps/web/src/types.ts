@@ -1,10 +1,13 @@
 export type SetType = 'warmup' | 'working';
 
+export type Gender = 'male' | 'female';
+
 export type User = {
   id: string;
   telegramId: string;
   firstName: string | null;
   username: string | null;
+  gender: Gender | null;
 };
 
 export type Exercise = {

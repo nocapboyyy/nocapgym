@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+export const genderSchema = z.enum(['male', 'female']);
+
+export const userGenderPayloadSchema = z.object({
+  gender: genderSchema
+});
+
 export const setTypeSchema = z.enum(['warmup', 'working']);
 
 export const templateSetSchema = z.object({
@@ -52,4 +58,3 @@ export const sessionExerciseSchema = z.object({
 export const sessionPatchSchema = z.object({
   exercises: z.array(sessionExerciseSchema)
 });
-
