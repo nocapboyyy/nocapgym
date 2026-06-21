@@ -51,7 +51,7 @@ Key screens:
 
 - `Планы` - plan list and plan creation wizard.
 - `Зал` - active workout execution.
-- `История` - backup, progress, completed sessions.
+- `История` - month calendar, progress, completed sessions.
 - `Админ` - exercise catalog management for admins.
 
 The plan creation flow is a modal wizard:
