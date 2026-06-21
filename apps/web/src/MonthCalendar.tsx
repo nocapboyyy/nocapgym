@@ -21,12 +21,48 @@ type PointerOrigin = {
 
 const WEEKDAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] as const;
 
+function isSameMonth(first: Date, second: Date): boolean {
+  return first.getFullYear() === second.getFullYear() && first.getMonth() === second.getMonth();
+}
+
+export function getDisplayedMonthAfterCurrentChange(
+  displayedMonth: Date,
+  previousCurrent: Date,
+  nextCurrent: Date
+): Date {
+  if (!isSameMonth(displayedMonth, previousCurrent)) {
+    return displayedMonth;
+  }
+
+  return new Date(nextCurrent.getFullYear(), nextCurrent.getMonth(), 1);
+}
+
+export function getDisplayedMonthAfterPointerUp(
+  displayedMonth: Date,
+  origin: PointerOrigin | null,
+  end: PointerOrigin
+): Date {
+  if (origin === null) {
+    return displayedMonth;
+  }
+
+  const delta = getHorizontalSwipeDelta({
+    startX: origin.x,
+    startY: origin.y,
+    endX: end.x,
+    endY: end.y
+  });
+
+  return delta === 0 ? displayedMonth : getAdjacentMonth(displayedMonth, delta);
+}
+
 export function MonthCalendar({ history, now }: MonthCalendarProps) {
   const [liveNow, setLiveNow] = useState(() => new Date());
   const current = now ?? liveNow;
   const [displayedMonth, setDisplayedMonth] = useState(
     () => new Date(current.getFullYear(), current.getMonth(), 1)
   );
+  const previousCurrent = useRef(current);
   const pointerOrigin = useRef<PointerOrigin | null>(null);
 
   useEffect(() => {
@@ -46,6 +82,19 @@ export function MonthCalendar({ history, now }: MonthCalendarProps) {
     });
   }, [now]);
 
+  const currentYear = current.getFullYear();
+  const currentMonth = current.getMonth();
+
+  useEffect(() => {
+    const priorCurrent = previousCurrent.current;
+    const nextCurrent = new Date(currentYear, currentMonth, 1);
+
+    setDisplayedMonth((month) =>
+      getDisplayedMonthAfterCurrentChange(month, priorCurrent, nextCurrent)
+    );
+    previousCurrent.current = nextCurrent;
+  }, [currentMonth, currentYear]);
+
   const changeMonth = (delta: -1 | 1) => {
     setDisplayedMonth((month) => getAdjacentMonth(month, delta));
   };
@@ -58,20 +107,9 @@ export function MonthCalendar({ history, now }: MonthCalendarProps) {
     const origin = pointerOrigin.current;
     pointerOrigin.current = null;
 
-    if (origin === null) {
-      return;
-    }
-
-    const delta = getHorizontalSwipeDelta({
-      startX: origin.x,
-      startY: origin.y,
-      endX: event.clientX,
-      endY: event.clientY
-    });
-
-    if (delta !== 0) {
-      changeMonth(delta);
-    }
+    setDisplayedMonth((month) =>
+      getDisplayedMonthAfterPointerUp(month, origin, { x: event.clientX, y: event.clientY })
+    );
   };
 
   const label = formatMonthYear(displayedMonth);
@@ -129,11 +167,7 @@ export function MonthCalendar({ history, now }: MonthCalendarProps) {
             <div key={day.dateKey} className={className} role="listitem" aria-label={day.accessibleLabel}>
               <time dateTime={day.dateKey}>{day.dayNumber}</time>
               {day.hasWorkout ? (
-                <span
-                  className="month-calendar-workout"
-                  role="img"
-                  aria-label={`Тренировка: ${day.accessibleLabel}`}
-                />
+                <span className="month-calendar-workout" aria-hidden="true" />
               ) : (
                 <span className="month-calendar-workout-placeholder" aria-hidden="true" />
               )}
