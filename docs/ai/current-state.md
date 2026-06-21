@@ -16,6 +16,7 @@ Last updated: 2026-06-21
 - Active workout screen with editable exercises and sets. Exercise cards are independently collapsible, the first card opens initially, and a palette-aligned indicator marks exercises whose sets are all complete.
 - Workout completion with optional template update.
 - Completed workout history.
+- History starts with a compact six-week month calendar. Completed workout days use dot markers; horizontal swipes or arrow controls change months without filtering history.
 - History workout cards show the source plan name instead of a generic stats icon.
 - The Plans tab replaces the former four-metric summary strip with a static Monday-Sunday current-week calendar.
 - Completed workouts are marked by local start date; adjacent-month days remain visible but muted.
@@ -37,6 +38,7 @@ Last updated: 2026-06-21
 ## Known Risks / Watch Areas
 
 - Telegram iOS WebView viewport behavior is tricky. Modal height should be retested on real iPhones after every layout change.
+- History calendar horizontal swipes and vertical page scrolling still need real-device QA in Telegram on iOS and Android.
 - `apps/web/src/App.tsx` is getting large. Future feature work may benefit from splitting panels/components.
 - SQLite is acceptable for v1 VPS deployment, but backups and migration discipline matter.
 - Local browser behavior may differ from Telegram Mini App behavior.
