@@ -17,6 +17,7 @@ Main route groups:
 - `routes/exercises.ts` - public catalog and admin exercise management.
 - `routes/templates.ts` - user workout templates.
 - `routes/sessions.ts` - active/completed sessions, history, progress, export/import.
+- `routes/users.ts` - authenticated current-user profile updates.
 
 Auth is registered as a Fastify preHandler in `auth/plugin.ts`.
 
@@ -27,6 +28,7 @@ Auth is registered as a Fastify preHandler in `auth/plugin.ts`.
 - If valid, backend upserts `User` by Telegram ID.
 - Local development can use `x-dev-telegram-id` when dev auth is enabled.
 - Admin access is controlled by `ADMIN_TELEGRAM_IDS`.
+- Admin authorization remains enforced by backend checks; frontend navigation is not an authority boundary.
 
 ## Data Model
 
@@ -41,7 +43,11 @@ Core Prisma models:
 - `SessionExercise`
 - `SessionSet`
 
+`User.gender` is a nullable `male`/`female` value. The migration leaves existing users at `null`, and both new and existing users with no value must complete gender onboarding before using the main app.
+
 Template/session children use cascade deletes where appropriate. Exercise deletion is not the preferred product flow; hiding is safer for preserving old history.
+
+`PATCH /api/me` accepts a gender update for the authenticated user and cannot select another user.
 
 ## Frontend
 
@@ -52,7 +58,10 @@ Key screens:
 - `Планы` - plan list and plan creation wizard.
 - `Зал` - active workout execution.
 - `История` - month calendar, progress, completed sessions.
-- `Админ` - exercise catalog management for admins.
+- `Цикл` - female-only placeholder with no cycle data yet.
+- `Админ` - service screen opened by admins from the profile menu, not a bottom tab.
+
+The bottom navigation uses persistent icon-over-label items and contains three tabs for men or four tabs for women. The profile menu allows gender changes and exposes the admin entry only when the backend reports admin access.
 
 The plan creation flow is a modal wizard:
 

@@ -2,6 +2,22 @@
 
 This is a short decision log. Keep entries small: date, decision, reason, consequence.
 
+## 2026-06-22 - Gender Is Explicit User Profile Data
+
+Decision: store a nullable user-provided `male` or `female` value and require users with no value to choose one.
+
+Reason: Telegram does not provide gender, so the app must not guess it for new or existing users.
+
+Consequence: gender can be changed from the profile menu and remains outside personal workout backup export/import.
+
+## 2026-06-22 - Admin Is Outside Primary Navigation
+
+Decision: open the admin service screen from the profile menu instead of a bottom tab.
+
+Reason: catalog administration is a secondary service action, not a primary workout destination.
+
+Consequence: only users reported as admins see the entry, and backend authorization checks remain authoritative.
+
 ## 2026-06-11 - Any Telegram User Can Access The App
 
 Decision: do not whitelist normal users.

@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   appendExpandedExerciseDisclosureState,
   getBottomControlsHidden,
   getHistorySessionPlanTitle,
   getInitialExerciseDisclosureState,
   getKeyboardViewportState,
+  getAppStartupState,
   getDragAutoScrollDelta,
   getPlansCalendarVisible,
   getProgressExercises,
@@ -14,8 +15,9 @@ import {
   removeExerciseDisclosureState,
   reorderTemplateExercises,
   getSavedTemplateExercises,
-  getTabTitle,
   getNextTemplateSet,
+  getPreviousUserTabAfterGenderChange,
+  orchestrateGenderSave,
   toggleExerciseDisclosureState
 } from './App';
 import type { Exercise, SessionSet, WorkoutSession } from './types';
@@ -106,15 +108,6 @@ describe('getProgressExercises', () => {
   });
 });
 
-describe('getTabTitle', () => {
-  it('matches the visible tab labels', () => {
-    expect(getTabTitle('templates')).toBe('Планы');
-    expect(getTabTitle('session')).toBe('Зал');
-    expect(getTabTitle('history')).toBe('История');
-    expect(getTabTitle('admin')).toBe('Админ');
-  });
-});
-
 describe('getKeyboardViewportState', () => {
   it('marks the keyboard as open when the visual viewport is significantly smaller', () => {
     const state = getKeyboardViewportState({
@@ -162,7 +155,93 @@ describe('getPlansCalendarVisible', () => {
     expect(getPlansCalendarVisible('templates')).toBe(true);
     expect(getPlansCalendarVisible('session')).toBe(false);
     expect(getPlansCalendarVisible('history')).toBe(false);
+    expect(getPlansCalendarVisible('cycle')).toBe(false);
     expect(getPlansCalendarVisible('admin')).toBe(false);
+  });
+});
+
+describe('getPreviousUserTabAfterGenderChange', () => {
+  it('normalizes a remembered cycle tab when gender changes to male', () => {
+    expect(getPreviousUserTabAfterGenderChange('cycle', 'male')).toBe('templates');
+  });
+
+  it('preserves remembered tabs that remain available', () => {
+    expect(getPreviousUserTabAfterGenderChange('history', 'male')).toBe('history');
+    expect(getPreviousUserTabAfterGenderChange('cycle', 'female')).toBe('cycle');
+  });
+});
+
+describe('getAppStartupState', () => {
+  it('uses a retry state instead of the app shell when loading failed without a user', () => {
+    expect(getAppStartupState({ loading: false, user: null, loadError: 'Ошибка' })).toBe('error');
+  });
+
+  it('distinguishes loading, onboarding, and ready states', () => {
+    expect(getAppStartupState({ loading: true, user: null, loadError: null })).toBe('loading');
+    expect(getAppStartupState({ loading: false, user: { gender: null }, loadError: null })).toBe('onboarding');
+    expect(getAppStartupState({ loading: false, user: { gender: 'female' }, loadError: null })).toBe('ready');
+  });
+});
+
+describe('orchestrateGenderSave', () => {
+  const updatedUser = {
+    id: 'user-1',
+    telegramId: '123',
+    firstName: 'Ирина',
+    username: null,
+    gender: 'female' as const
+  };
+
+  it('commits the PATCH result before loading initial workout data', async () => {
+    const events: string[] = [];
+
+    const result = await orchestrateGenderSave({
+      gender: 'female',
+      shouldLoadWorkoutData: true,
+      patchUser: async () => updatedUser,
+      commitUser: () => events.push('commit'),
+      loadWorkoutData: async () => {
+        events.push('load');
+        throw new Error('load failed');
+      }
+    });
+
+    expect(events).toEqual(['commit', 'load']);
+    expect(result).toBe('data-load-error');
+  });
+
+  it('does not commit or load when PATCH fails', async () => {
+    const commitUser = vi.fn();
+    const loadWorkoutData = vi.fn();
+
+    const result = await orchestrateGenderSave({
+      gender: 'female',
+      shouldLoadWorkoutData: true,
+      patchUser: async () => { throw new Error('patch failed'); },
+      commitUser,
+      loadWorkoutData
+    });
+
+    expect(result).toBe('profile-update-error');
+    expect(commitUser).not.toHaveBeenCalled();
+    expect(loadWorkoutData).not.toHaveBeenCalled();
+  });
+
+  it('skips workout loading for an already configured profile', async () => {
+    const commitUser = vi.fn();
+    const loadWorkoutData = vi.fn();
+
+    const result = await orchestrateGenderSave({
+      gender: 'female',
+      shouldLoadWorkoutData: false,
+      patchUser: async () => updatedUser,
+      commitUser,
+      loadWorkoutData
+    });
+
+    expect(result).toBe('success');
+    expect(commitUser).toHaveBeenCalledWith(updatedUser);
+    expect(loadWorkoutData).not.toHaveBeenCalled();
   });
 });
 

@@ -177,6 +177,26 @@ h3 {
   margin-bottom: 14px;
 }
 
+.topbar > div:first-child {
+  min-width: 0;
+}
+
+.topbar > div:last-child {
+  position: relative;
+  flex: 0 1 auto;
+  max-width: 46%;
+}
+
+.topbar h1 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topbar .icon-button {
+  min-height: 44px;
+  margin-bottom: 8px;
+}
+
 .eyebrow {
   color: var(--powder-petal);
   font-size: 11px;
@@ -185,12 +205,15 @@ h3 {
 }
 
 .profile {
-  max-width: 42%;
+  width: 100%;
+  min-height: 44px;
   border: 1px solid rgba(255, 181, 167, 0.22);
   border-radius: 8px;
   padding: 8px 10px;
   color: var(--almond-silk);
   background: var(--panel-2);
+  display: inline-flex;
+  justify-content: flex-start;
   font-size: 13px;
   font-weight: 700;
   overflow: hidden;
@@ -221,11 +244,12 @@ h3 {
   z-index: 10;
   width: min(732px, calc(100% - 32px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-  padding: 7px;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 4px;
+  padding: 6px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
   background: #171516;
   transform: translateX(-50%);
   box-shadow: 0 20px 48px rgba(0, 0, 0, 0.42);
@@ -233,18 +257,135 @@ h3 {
 
 .tabbar button {
   min-width: 0;
-  min-height: 48px;
+  min-height: 56px;
   padding: 0 8px;
   color: var(--muted);
   background: transparent;
+  flex-direction: column;
+  gap: 4px;
   box-shadow: none;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 730;
 }
 
+.tabbar button span {
+  display: block;
+}
+
 .tabbar button.active {
-  color: #141011;
-  background: var(--powder-blush);
+  color: var(--powder-petal);
+  background: rgba(255, 181, 167, 0.12);
+}
+
+.gender-onboarding {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  place-items: center;
+  padding:
+    max(18px, env(safe-area-inset-top, 0px))
+    max(14px, env(safe-area-inset-right, 0px))
+    max(18px, env(safe-area-inset-bottom, 0px))
+    max(14px, env(safe-area-inset-left, 0px));
+}
+
+.gender-onboarding-card {
+  width: min(420px, 100%);
+  gap: 20px;
+  padding: 20px;
+}
+
+.gender-onboarding-card p {
+  margin-top: 10px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.gender-options {
+  display: grid;
+  gap: 10px;
+}
+
+.gender-options button {
+  min-height: 52px;
+  justify-content: flex-start;
+}
+
+.form-error {
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.profile-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 12;
+  width: min(210px, calc(100vw - 24px));
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px;
+  background: var(--panel-2);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.46);
+}
+
+.profile-gender-actions {
+  display: grid;
+  gap: 4px;
+}
+
+.profile-gender-actions::before {
+  padding: 4px 8px 2px;
+  color: var(--muted);
+  content: 'Пол';
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.profile-menu button {
+  width: 100%;
+  min-height: 44px;
+  justify-content: flex-start;
+}
+
+.profile-menu-action {
+  color: var(--text);
+  background: transparent;
+  box-shadow: none;
+}
+
+.profile-menu-action.current,
+.profile-menu-action[aria-pressed='true'] {
+  color: var(--powder-petal);
+  background: rgba(255, 181, 167, 0.12);
+}
+
+.profile-menu > .profile-menu-action {
+  margin-top: 2px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 8px 8px;
+}
+
+.cycle-placeholder {
+  display: grid;
+  min-height: 280px;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+}
+
+.cycle-placeholder svg {
+  width: 32px;
+  height: 32px;
+  color: var(--powder-petal);
 }
 
 .create-plan-button {
@@ -986,14 +1127,6 @@ h3 {
 @media (max-width: 430px) {
   .app-shell {
     padding: 16px 12px calc(136px + env(safe-area-inset-bottom, 0px));
-  }
-
-  .tabbar {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .tabbar button {
-    font-size: 11px;
   }
 
   .panel-title,

@@ -3,6 +3,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerE
 import {
   Activity,
   ArrowLeft,
+  CalendarDays,
   Check,
   ChevronDown,
   CircleCheck,
@@ -14,16 +15,24 @@ import {
   Play,
   Plus,
   Save,
-  Shield,
   Trash2,
+  UserRound,
   X
 } from 'lucide-react';
 import { api } from './api';
 import { initTelegramApp, setTelegramVerticalSwipesEnabled } from './telegram';
 import { MonthCalendar } from './MonthCalendar';
 import { WeekCalendar } from './WeekCalendar';
+import { CyclePanel, GenderOnboarding, ProfileMenu } from './UserPersonalization';
+import {
+  getSafeViewAfterGenderChange,
+  getTabTitle,
+  getVisibleUserTabs
+} from './navigation';
+import type { AppView, UserTab } from './navigation';
 import type {
   Exercise,
+  Gender,
   ProgressPoint,
   SessionExercise,
   SessionSet,
@@ -33,19 +42,6 @@ import type {
   WorkoutSession,
   WorkoutTemplate
 } from './types';
-
-export type Tab = 'templates' | 'session' | 'history' | 'admin';
-
-const tabLabels: Record<Tab, string> = {
-  templates: 'Планы',
-  session: 'Зал',
-  history: 'История',
-  admin: 'Админ'
-};
-
-export function getTabTitle(tab: Tab) {
-  return tabLabels[tab];
-}
 
 export function getKeyboardViewportState(input: {
   windowInnerHeight: number;
@@ -73,8 +69,57 @@ export function getBottomControlsHidden(input: { isKeyboardOpen: boolean; isEdit
   return input.isKeyboardOpen || input.isEditableFocused;
 }
 
-export function getPlansCalendarVisible(tab: Tab) {
-  return tab === 'templates';
+export function getPlansCalendarVisible(view: AppView) {
+  return view === 'templates';
+}
+
+const userTabMetadata = {
+  templates: { label: getTabTitle('templates'), icon: Dumbbell },
+  session: { label: getTabTitle('session'), icon: Activity },
+  history: { label: getTabTitle('history'), icon: History },
+  cycle: { label: getTabTitle('cycle'), icon: CalendarDays }
+} satisfies Record<UserTab, { label: string; icon: typeof Dumbbell }>;
+
+const genderSaveError = 'Не удалось сохранить пол. Попробуйте ещё раз.';
+const initialLoadError = 'Не удалось загрузить данные. Попробуйте ещё раз.';
+
+export function getPreviousUserTabAfterGenderChange(previousTab: UserTab, gender: Gender): UserTab {
+  return previousTab === 'cycle' && gender === 'male' ? 'templates' : previousTab;
+}
+
+export function getAppStartupState(input: {
+  loading: boolean;
+  user: Pick<User, 'gender'> | null;
+  loadError: string | null;
+}): 'loading' | 'error' | 'onboarding' | 'ready' {
+  if (input.loading) return 'loading';
+  if (input.loadError || !input.user) return 'error';
+  return input.user.gender === null ? 'onboarding' : 'ready';
+}
+
+export async function orchestrateGenderSave(input: {
+  gender: Gender;
+  shouldLoadWorkoutData: boolean;
+  patchUser: (gender: Gender) => Promise<User>;
+  commitUser: (user: User) => void;
+  loadWorkoutData: () => Promise<void>;
+}): Promise<'success' | 'profile-update-error' | 'data-load-error'> {
+  let updatedUser: User;
+  try {
+    updatedUser = await input.patchUser(input.gender);
+  } catch {
+    return 'profile-update-error';
+  }
+
+  input.commitUser(updatedUser);
+  if (!input.shouldLoadWorkoutData) return 'success';
+
+  try {
+    await input.loadWorkoutData();
+    return 'success';
+  } catch {
+    return 'data-load-error';
+  }
 }
 
 export function getHistorySessionPlanTitle(input: { template?: Pick<WorkoutTemplate, 'id' | 'name'> | null }) {
@@ -224,7 +269,7 @@ export function getDragAutoScrollDelta(input: { pointerY: number; containerTop: 
 }
 
 export function App() {
-  const [tab, setTab] = useState<Tab>('templates');
+  const [view, setView] = useState<AppView>('templates');
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -240,6 +285,12 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [editableFocused, setEditableFocused] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [savingGender, setSavingGender] = useState(false);
+  const [genderError, setGenderError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const previousUserTabRef = useRef<UserTab>('templates');
 
   useEffect(() => {
     initTelegramApp();
@@ -305,24 +356,99 @@ export function App() {
     return () => window.clearTimeout(timeout);
   }, [message]);
 
-  async function loadInitialData() {
-    setLoading(true);
-    const [me, exerciseList, templateList, historyList] = await Promise.all([
-      api.get<{ user: User; isAdmin: boolean }>('/api/me'),
+  useEffect(() => {
+    if (!profileMenuOpen) return;
+
+    function closeOnOutsidePointer(event: PointerEvent) {
+      if (event.target instanceof Node && !profileMenuRef.current?.contains(event.target)) {
+        setProfileMenuOpen(false);
+      }
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setProfileMenuOpen(false);
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [profileMenuOpen]);
+
+  async function loadWorkoutData(admin: boolean) {
+    const [exerciseList, templateList, historyList, adminExerciseList] = await Promise.all([
       api.get<Exercise[]>('/api/exercises'),
       api.get<WorkoutTemplate[]>('/api/templates'),
-      api.get<WorkoutSession[]>('/api/history')
+      api.get<WorkoutSession[]>('/api/history'),
+      admin ? api.get<Exercise[]>('/api/admin/exercises') : Promise.resolve([])
     ]);
 
-    setUser(me.user);
-    setIsAdmin(me.isAdmin);
     setExercises(exerciseList);
     setTemplates(templateList);
     setHistory(historyList);
-    if (me.isAdmin) {
-      setAdminExercises(await api.get<Exercise[]>('/api/admin/exercises'));
+    setAdminExercises(adminExerciseList);
+  }
+
+  async function loadInitialData() {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const me = await api.get<{ user: User; isAdmin: boolean }>('/api/me');
+      setUser(me.user);
+      setIsAdmin(me.isAdmin);
+      if (me.user.gender !== null) {
+        await loadWorkoutData(me.isAdmin);
+      }
+    } catch {
+      setLoadError(initialLoadError);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
+  }
+
+  async function saveGender(gender: Gender) {
+    const shouldLoadWorkoutData = user?.gender === null;
+    setSavingGender(true);
+    setGenderError(null);
+
+    const result = await orchestrateGenderSave({
+      gender,
+      shouldLoadWorkoutData,
+      patchUser: (nextGender) => api.patch<User>('/api/me', { gender: nextGender }),
+      commitUser: (updatedUser) => {
+        setUser(updatedUser);
+        previousUserTabRef.current = getPreviousUserTabAfterGenderChange(
+          previousUserTabRef.current,
+          gender
+        );
+        setView((currentView) => getSafeViewAfterGenderChange(currentView, gender));
+        setProfileMenuOpen(false);
+      },
+      loadWorkoutData: async () => {
+        setLoading(true);
+        try {
+          await loadWorkoutData(isAdmin);
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
+
+    if (result === 'profile-update-error') {
+      setGenderError(genderSaveError);
+    } else if (result === 'data-load-error') {
+      setLoadError(initialLoadError);
+    }
+    setSavingGender(false);
+  }
+
+  function openAdmin() {
+    if (!isAdmin) return;
+    if (view !== 'admin') previousUserTabRef.current = view;
+    setProfileMenuOpen(false);
+    setView('admin');
   }
 
   async function refreshTemplates() {
@@ -363,7 +489,7 @@ export function App() {
   async function startSession(templateId: string) {
     const session = await api.post<WorkoutSession>('/api/sessions/start', { templateId });
     setActiveSession(session);
-    setTab('session');
+    setView('session');
   }
 
   async function completeSession(applyToTemplate: boolean) {
@@ -377,7 +503,7 @@ export function App() {
       await refreshTemplates();
     }
     setActiveSession(null);
-    setTab('history');
+    setView('history');
     setMessage(applyToTemplate ? 'Тренировка завершена, шаблон обновлён' : 'Тренировка завершена');
     await refreshHistory();
   }
@@ -415,28 +541,82 @@ export function App() {
   }
 
   const tabs = useMemo(
-    () => [
-      { id: 'templates' as const, label: getTabTitle('templates'), icon: Dumbbell },
-      { id: 'session' as const, label: getTabTitle('session'), icon: Activity },
-      { id: 'history' as const, label: getTabTitle('history'), icon: History },
-      ...(isAdmin ? [{ id: 'admin' as const, label: getTabTitle('admin'), icon: Shield }] : [])
-    ],
-    [isAdmin]
+    () => getVisibleUserTabs(user?.gender ?? null).map((id) => ({ id, ...userTabMetadata[id] })),
+    [user?.gender]
   );
   const bottomControlsHidden = getBottomControlsHidden({ isKeyboardOpen: keyboardOpen, isEditableFocused: editableFocused });
+  const startupState = getAppStartupState({ loading, user, loadError });
 
-  if (loading) {
+  function renderLoadError() {
+    return (
+      <main className="app-shell centered">
+        <section className="panel empty" role="alert">
+          <p>{loadError ?? initialLoadError}</p>
+          <button type="button" onClick={() => void loadInitialData()}>
+            Повторить
+          </button>
+        </section>
+      </main>
+    );
+  }
+
+  if (startupState === 'loading') {
     return <main className="app-shell centered">Загрузка...</main>;
+  }
+
+  if (startupState === 'error') {
+    return renderLoadError();
+  }
+
+  if (startupState === 'onboarding') {
+    return <GenderOnboarding saving={savingGender} error={genderError} onSelect={saveGender} />;
+  }
+
+  if (!user || user.gender === null) {
+    return renderLoadError();
   }
 
   return (
     <main className={bottomControlsHidden ? 'app-shell bottom-controls-hidden' : 'app-shell'}>
       <header className="topbar">
         <div>
+          {view === 'admin' && isAdmin ? (
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Вернуться назад"
+              onClick={() => setView(previousUserTabRef.current)}
+            >
+              <ArrowLeft aria-hidden="true" />
+            </button>
+          ) : null}
           <span className="eyebrow">NOCAPGYM</span>
-          <h1>{getTabTitle(tab)}</h1>
+          <h1>{getTabTitle(view)}</h1>
         </div>
-        <div className="profile">{user?.firstName ?? user?.username ?? 'Пользователь'}</div>
+        <div ref={profileMenuRef}>
+          <button
+            type="button"
+            className="profile"
+            aria-haspopup="dialog"
+            aria-expanded={profileMenuOpen}
+            onClick={() => setProfileMenuOpen((open) => !open)}
+          >
+            <UserRound aria-hidden="true" />
+            {user.firstName ?? user.username ?? 'Пользователь'}
+          </button>
+          {profileMenuOpen ? (
+            <>
+              <ProfileMenu
+                gender={user.gender}
+                isAdmin={isAdmin}
+                saving={savingGender}
+                onGenderChange={saveGender}
+                onOpenAdmin={openAdmin}
+              />
+              {genderError ? <p className="form-error" role="alert">{genderError}</p> : null}
+            </>
+          ) : null}
+        </div>
       </header>
 
       {message && (
@@ -445,18 +625,25 @@ export function App() {
         </button>
       )}
 
-      <nav className="tabbar">
-        {tabs.map((item) => (
-          <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}>
-            <item.icon size={18} />
-            {item.label}
-          </button>
-        ))}
-      </nav>
+      {view !== 'admin' ? (
+        <nav className="tabbar" aria-label="Основная навигация">
+          {tabs.map((item) => (
+            <button
+              key={item.id}
+              className={view === item.id ? 'active' : ''}
+              aria-current={view === item.id ? 'page' : undefined}
+              onClick={() => setView(item.id)}
+            >
+              <item.icon size={18} aria-hidden="true" />
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+      ) : null}
 
-      {getPlansCalendarVisible(tab) && <WeekCalendar history={history} />}
+      {getPlansCalendarVisible(view) && <WeekCalendar history={history} />}
 
-      {tab === 'templates' && (
+      {view === 'templates' && (
         <TemplatePanel
           exercises={exercises}
           templates={templates}
@@ -490,7 +677,7 @@ export function App() {
         />
       )}
 
-      {tab === 'session' && (
+      {view === 'session' && (
         <SessionPanel
           session={activeSession}
           exercises={exercises}
@@ -499,7 +686,7 @@ export function App() {
         />
       )}
 
-      {tab === 'history' && (
+      {view === 'history' && (
         <HistoryPanel
           history={history}
           progress={progress}
@@ -509,7 +696,9 @@ export function App() {
         />
       )}
 
-      {tab === 'admin' && isAdmin && (
+      {view === 'cycle' && user.gender === 'female' && <CyclePanel />}
+
+      {view === 'admin' && isAdmin && (
         <AdminPanel
           exercises={adminExercises}
           reload={async () => {

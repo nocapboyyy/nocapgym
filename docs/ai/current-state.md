@@ -1,10 +1,11 @@
 # Current State
 
-Last updated: 2026-06-21
+Last updated: 2026-06-22
 
 ## Working Features
 
 - Telegram Mini App auth with automatic user provisioning.
+- Explicit gender onboarding blocks the main app for new or existing users whose gender is still `null`.
 - Dev auth fallback for local browser testing.
 - User workout templates.
 - Plan creation wizard with modal exercise picker and set editor.
@@ -22,7 +23,10 @@ Last updated: 2026-06-21
 - Completed workouts are marked by local start date; adjacent-month days remain visible but muted.
 - The shared summary strip is no longer shown on Gym or History.
 - Per-exercise progress from working sets.
+- Persistent icon-over-label bottom navigation is gender-aware: men have three primary tabs, while women also have `Цикл`.
+- The female-only `Цикл` screen is currently a no-data placeholder.
 - User JSON export/import remains supported by frontend logic and API, but its controls are temporarily hidden from the History UI.
+- The profile menu allows gender changes and provides admins an entry to exercise management outside the primary navigation.
 - Admin exercise management.
 - Exercise hiding instead of hard delete as the preferred catalog flow.
 - Delete completed workout from history.
@@ -39,6 +43,7 @@ Last updated: 2026-06-21
 
 - Telegram iOS WebView viewport behavior is tricky. Modal height should be retested on real iPhones after every layout change.
 - History calendar horizontal swipes and vertical page scrolling still need real-device QA in Telegram on iOS and Android.
+- Gender onboarding, the profile popover, and both three-tab and four-tab navigation need real-device Telegram QA on iOS and Android.
 - `apps/web/src/App.tsx` is getting large. Future feature work may benefit from splitting panels/components.
 - SQLite is acceptable for v1 VPS deployment, but backups and migration discipline matter.
 - Local browser behavior may differ from Telegram Mini App behavior.
