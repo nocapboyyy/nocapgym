@@ -6,6 +6,8 @@ export const userGenderPayloadSchema = z.object({
   gender: genderSchema
 });
 
+export const muscleGroupSchema = z.enum(['neck', 'shoulders', 'chest', 'arms', 'abs', 'back', 'glutes', 'legs']);
+
 export const setTypeSchema = z.enum(['warmup', 'working']);
 
 export const templateSetSchema = z.object({
@@ -31,7 +33,7 @@ export const templatePayloadSchema = z.object({
 
 export const exercisePayloadSchema = z.object({
   name: z.string().trim().min(1),
-  muscleGroup: z.string().trim().min(1),
+  muscleGroup: muscleGroupSchema,
   equipment: z.string().trim().min(1),
   techniqueNote: z.string().trim().optional().nullable(),
   isHidden: z.boolean().optional()

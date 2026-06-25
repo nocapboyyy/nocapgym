@@ -5,6 +5,7 @@ import {
   getHistorySessionPlanTitle,
   getInitialExerciseDisclosureState,
   getKeyboardViewportState,
+  getMuscleGroupLabel,
   getAppStartupState,
   getDragAutoScrollDelta,
   getPlansCalendarVisible,
@@ -17,6 +18,7 @@ import {
   getSavedTemplateExercises,
   getNextTemplateSet,
   getPreviousUserTabAfterGenderChange,
+  MUSCLE_GROUP_OPTIONS,
   orchestrateGenderSave,
   toggleExerciseDisclosureState
 } from './App';
@@ -65,25 +67,44 @@ describe('active workout disclosure state', () => {
 describe('getSessionExerciseTitle', () => {
   it('uses the currently selected catalog exercise before stale embedded data', () => {
     const oldExercise: Exercise = {
-      id: 'bench', name: 'Жим лёжа', muscleGroup: 'Грудь', equipment: 'Штанга', techniqueNote: null, isHidden: false
+      id: 'bench', name: 'Жим лёжа', muscleGroup: 'chest', equipment: 'Штанга', techniqueNote: null, isHidden: false
     };
     const selectedExercise: Exercise = {
-      id: 'squat', name: 'Присед', muscleGroup: 'Ноги', equipment: 'Штанга', techniqueNote: null, isHidden: false
+      id: 'squat', name: 'Присед', muscleGroup: 'legs', equipment: 'Штанга', techniqueNote: null, isHidden: false
     };
 
     expect(getSessionExerciseTitle({ exerciseId: 'squat', exercise: oldExercise }, [oldExercise, selectedExercise])).toBe('Присед');
   });
 });
 
+describe('exercise muscle groups', () => {
+  it('exposes the supported muscle groups with Russian labels', () => {
+    expect(MUSCLE_GROUP_OPTIONS).toEqual([
+      { value: 'neck', label: 'Шея' },
+      { value: 'shoulders', label: 'Плечи' },
+      { value: 'chest', label: 'Грудь' },
+      { value: 'arms', label: 'Руки' },
+      { value: 'abs', label: 'Пресс' },
+      { value: 'back', label: 'Спина' },
+      { value: 'glutes', label: 'Ягодицы' },
+      { value: 'legs', label: 'Ноги' }
+    ]);
+  });
+
+  it('shows a fallback label when an existing exercise has no group yet', () => {
+    expect(getMuscleGroupLabel(null)).toBe('Группа не выбрана');
+  });
+});
+
 describe('getProgressExercises', () => {
   it('returns unique history exercises with completed working progress sorted by name', () => {
     const exercises: Record<string, Exercise> = {
-      hidden: { id: 'hidden', name: 'Жим лёжа', muscleGroup: 'Грудь', equipment: 'Штанга', techniqueNote: null, isHidden: true },
-      valid: { id: 'valid', name: 'Армейский жим', muscleGroup: 'Плечи', equipment: 'Гантели', techniqueNote: null, isHidden: false },
-      warmup: { id: 'warmup', name: 'Разминка', muscleGroup: 'Ноги', equipment: 'Штанга', techniqueNote: null, isHidden: false },
-      incomplete: { id: 'incomplete', name: 'Незавершённое', muscleGroup: 'Спина', equipment: 'Блок', techniqueNote: null, isHidden: false },
-      missingActualWeight: { id: 'missing-actual-weight', name: 'Без веса', muscleGroup: 'Руки', equipment: 'Гантели', techniqueNote: null, isHidden: false },
-      missingActualReps: { id: 'missing-actual-reps', name: 'Без повторов', muscleGroup: 'Руки', equipment: 'Гантели', techniqueNote: null, isHidden: false }
+      hidden: { id: 'hidden', name: 'Жим лёжа', muscleGroup: 'chest', equipment: 'Штанга', techniqueNote: null, isHidden: true },
+      valid: { id: 'valid', name: 'Армейский жим', muscleGroup: 'shoulders', equipment: 'Гантели', techniqueNote: null, isHidden: false },
+      warmup: { id: 'warmup', name: 'Разминка', muscleGroup: 'legs', equipment: 'Штанга', techniqueNote: null, isHidden: false },
+      incomplete: { id: 'incomplete', name: 'Незавершённое', muscleGroup: 'back', equipment: 'Блок', techniqueNote: null, isHidden: false },
+      missingActualWeight: { id: 'missing-actual-weight', name: 'Без веса', muscleGroup: 'arms', equipment: 'Гантели', techniqueNote: null, isHidden: false },
+      missingActualReps: { id: 'missing-actual-reps', name: 'Без повторов', muscleGroup: 'arms', equipment: 'Гантели', techniqueNote: null, isHidden: false }
     };
     const set = (patch: Partial<SessionSet>): SessionSet => ({
       type: 'working', plannedWeightKg: null, plannedReps: null,

@@ -33,6 +33,7 @@ import type { AppView, UserTab } from './navigation';
 import type {
   Exercise,
   Gender,
+  MuscleGroup,
   ProgressPoint,
   SessionExercise,
   SessionSet,
@@ -82,6 +83,21 @@ const userTabMetadata = {
 
 const genderSaveError = 'Не удалось сохранить пол. Попробуйте ещё раз.';
 const initialLoadError = 'Не удалось загрузить данные. Попробуйте ещё раз.';
+
+export const MUSCLE_GROUP_OPTIONS: Array<{ value: MuscleGroup; label: string }> = [
+  { value: 'neck', label: 'Шея' },
+  { value: 'shoulders', label: 'Плечи' },
+  { value: 'chest', label: 'Грудь' },
+  { value: 'arms', label: 'Руки' },
+  { value: 'abs', label: 'Пресс' },
+  { value: 'back', label: 'Спина' },
+  { value: 'glutes', label: 'Ягодицы' },
+  { value: 'legs', label: 'Ноги' }
+];
+
+export function getMuscleGroupLabel(muscleGroup: MuscleGroup | null) {
+  return MUSCLE_GROUP_OPTIONS.find((option) => option.value === muscleGroup)?.label ?? 'Группа не выбрана';
+}
 
 export function getPreviousUserTabAfterGenderChange(previousTab: UserTab, gender: Gender): UserTab {
   return previousTab === 'cycle' && gender === 'male' ? 'templates' : previousTab;
@@ -1462,19 +1478,31 @@ export function HistoryPanel(props: {
 }
 
 function AdminPanel(props: { exercises: Exercise[]; reload: () => Promise<void> }) {
-  const [draft, setDraft] = useState({
+  type ExerciseDraft = {
+    name: string;
+    muscleGroup: MuscleGroup | '';
+    equipment: string;
+    techniqueNote: string;
+    isHidden: boolean;
+  };
+
+  const emptyDraft: ExerciseDraft = {
     name: '',
     muscleGroup: '',
     equipment: '',
     techniqueNote: '',
     isHidden: false
-  });
+  };
+
+  const [draft, setDraft] = useState<ExerciseDraft>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState(draft);
+  const canCreateExercise = draft.name.trim().length > 0 && draft.muscleGroup !== '' && draft.equipment.trim().length > 0;
+  const canSaveExercise = editDraft.name.trim().length > 0 && editDraft.muscleGroup !== '' && editDraft.equipment.trim().length > 0;
 
   async function saveExercise() {
     await api.post('/api/admin/exercises', draft);
-    setDraft({ name: '', muscleGroup: '', equipment: '', techniqueNote: '', isHidden: false });
+    setDraft(emptyDraft);
     await props.reload();
   }
 
@@ -1483,11 +1511,18 @@ function AdminPanel(props: { exercises: Exercise[]; reload: () => Promise<void> 
       <section className="panel">
         <h2>Новое упражнение</h2>
         <input placeholder="Название" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
-        <input
-          placeholder="Группа мышц"
+        <select
+          aria-label="Группа мышц"
           value={draft.muscleGroup}
-          onChange={(event) => setDraft({ ...draft, muscleGroup: event.target.value })}
-        />
+          onChange={(event) => setDraft({ ...draft, muscleGroup: event.target.value as MuscleGroup | '' })}
+        >
+          <option value="">Группа мышц</option>
+          {MUSCLE_GROUP_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
         <input
           placeholder="Оборудование"
           value={draft.equipment}
@@ -1498,7 +1533,7 @@ function AdminPanel(props: { exercises: Exercise[]; reload: () => Promise<void> 
           value={draft.techniqueNote}
           onChange={(event) => setDraft({ ...draft, techniqueNote: event.target.value })}
         />
-        <button onClick={saveExercise}>
+        <button disabled={!canCreateExercise} onClick={saveExercise}>
           <Plus size={18} /> Создать
         </button>
       </section>
@@ -1508,10 +1543,18 @@ function AdminPanel(props: { exercises: Exercise[]; reload: () => Promise<void> 
           {editingId === exercise.id ? (
             <div className="edit-grid">
               <input value={editDraft.name} onChange={(event) => setEditDraft({ ...editDraft, name: event.target.value })} />
-              <input
+              <select
+                aria-label="Группа мышц"
                 value={editDraft.muscleGroup}
-                onChange={(event) => setEditDraft({ ...editDraft, muscleGroup: event.target.value })}
-              />
+                onChange={(event) => setEditDraft({ ...editDraft, muscleGroup: event.target.value as MuscleGroup | '' })}
+              >
+                <option value="">Группа мышц</option>
+                {MUSCLE_GROUP_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
               <input
                 value={editDraft.equipment}
                 onChange={(event) => setEditDraft({ ...editDraft, equipment: event.target.value })}
@@ -1522,6 +1565,7 @@ function AdminPanel(props: { exercises: Exercise[]; reload: () => Promise<void> 
               />
               <div className="actions">
                 <button
+                  disabled={!canSaveExercise}
                   onClick={async () => {
                     await api.patch(`/api/admin/exercises/${exercise.id}`, editDraft);
                     setEditingId(null);
@@ -1540,7 +1584,7 @@ function AdminPanel(props: { exercises: Exercise[]; reload: () => Promise<void> 
               <div>
                 <h3>{exercise.name}</h3>
                 <span className="muted">
-                  {exercise.muscleGroup} · {exercise.equipment}
+                  {getMuscleGroupLabel(exercise.muscleGroup)} · {exercise.equipment}
                 </span>
               </div>
               <div className="actions compact-actions">
@@ -1550,7 +1594,7 @@ function AdminPanel(props: { exercises: Exercise[]; reload: () => Promise<void> 
                     setEditingId(exercise.id);
                     setEditDraft({
                       name: exercise.name,
-                      muscleGroup: exercise.muscleGroup,
+                      muscleGroup: exercise.muscleGroup ?? '',
                       equipment: exercise.equipment,
                       techniqueNote: exercise.techniqueNote ?? '',
                       isHidden: exercise.isHidden
