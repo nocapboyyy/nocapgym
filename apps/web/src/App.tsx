@@ -467,6 +467,16 @@ export function App() {
     setView('admin');
   }
 
+  function toggleAdminInterface() {
+    if (!isAdmin) return;
+    if (view === 'admin') {
+      setProfileMenuOpen(false);
+      setView(previousUserTabRef.current);
+    } else {
+      openAdmin();
+    }
+  }
+
   async function refreshTemplates() {
     setTemplates(await api.get<WorkoutTemplate[]>('/api/templates'));
   }
@@ -596,16 +606,6 @@ export function App() {
     <main className={bottomControlsHidden ? 'app-shell bottom-controls-hidden' : 'app-shell'}>
       <header className="topbar">
         <div>
-          {view === 'admin' && isAdmin ? (
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Вернуться назад"
-              onClick={() => setView(previousUserTabRef.current)}
-            >
-              <ArrowLeft aria-hidden="true" />
-            </button>
-          ) : null}
           <span className="eyebrow">NOCAPGYM</span>
           <h1>{getTabTitle(view)}</h1>
         </div>
@@ -625,9 +625,10 @@ export function App() {
               <ProfileMenu
                 gender={user.gender}
                 isAdmin={isAdmin}
+                adminActionLabel={view === 'admin' ? 'Клиент' : 'Админ'}
                 saving={savingGender}
                 onGenderChange={saveGender}
-                onOpenAdmin={openAdmin}
+                onAdminAction={toggleAdminInterface}
               />
               {genderError ? <p className="form-error" role="alert">{genderError}</p> : null}
             </>

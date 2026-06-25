@@ -192,11 +192,6 @@ h3 {
   text-overflow: ellipsis;
 }
 
-.topbar .icon-button {
-  min-height: 44px;
-  margin-bottom: 8px;
-}
-
 .eyebrow {
   color: var(--powder-petal);
   font-size: 11px;

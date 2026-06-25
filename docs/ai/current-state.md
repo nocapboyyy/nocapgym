@@ -26,7 +26,7 @@ Last updated: 2026-06-22
 - Persistent icon-over-label bottom navigation is gender-aware: men have three primary tabs, while women also have `Цикл`.
 - The female-only `Цикл` screen is currently a no-data placeholder.
 - User JSON export/import remains supported by frontend logic and API, but its controls are temporarily hidden from the History UI.
-- The profile menu allows gender changes and provides admins an entry to exercise management outside the primary navigation.
+- The profile menu allows gender changes and provides admins a client/admin interface switch outside the primary navigation.
 - Admin exercise management with predefined muscle group selection.
 - Exercise hiding instead of hard delete as the preferred catalog flow.
 - Delete completed workout from history.

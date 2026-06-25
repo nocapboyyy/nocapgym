@@ -57,17 +57,19 @@ export function GenderOnboarding({ saving, error, onSelect }: GenderOnboardingPr
 type ProfileMenuProps = {
   gender: Gender;
   isAdmin: boolean;
+  adminActionLabel: string;
   saving: boolean;
   onGenderChange: (gender: Gender) => void;
-  onOpenAdmin: () => void;
+  onAdminAction: () => void;
 };
 
 export function ProfileMenu({
   gender,
   isAdmin,
+  adminActionLabel,
   saving,
   onGenderChange,
-  onOpenAdmin
+  onAdminAction
 }: ProfileMenuProps) {
   return (
     <div className="profile-menu" role="dialog" aria-label="Профиль">
@@ -94,9 +96,9 @@ export function ProfileMenu({
         </button>
       </div>
       {isAdmin ? (
-        <button type="button" className="profile-menu-action" onClick={onOpenAdmin}>
+        <button type="button" className="profile-menu-action" onClick={onAdminAction}>
           <Shield aria-hidden="true" />
-          Админка
+          {adminActionLabel}
         </button>
       ) : null}
     </div>

@@ -42,9 +42,10 @@ describe('ProfileMenu', () => {
       <ProfileMenu
         gender="male"
         isAdmin={false}
+        adminActionLabel="Админ"
         saving={false}
         onGenderChange={vi.fn()}
-        onOpenAdmin={vi.fn()}
+        onAdminAction={vi.fn()}
       />
     );
 
@@ -59,22 +60,42 @@ describe('ProfileMenu', () => {
     expect(html).toContain('Мужской');
     expect(html).toContain('Женский');
     expect(html).toContain('profile-menu-action current');
-    expect(html).not.toContain('Админка');
+    expect(html).not.toContain('Админ');
     expect(html).toContain('aria-hidden="true"');
   });
 
-  it('shows the admin action for an admin', () => {
+  it('shows an admin switch action for an admin in the client interface', () => {
     const html = renderToStaticMarkup(
       <ProfileMenu
         gender="female"
         isAdmin
+        adminActionLabel="Админ"
         saving={false}
         onGenderChange={vi.fn()}
-        onOpenAdmin={vi.fn()}
+        onAdminAction={vi.fn()}
       />
     );
 
-    expect(html).toContain('Админка');
+    expect(html).toContain('Админ');
+    expect(html).not.toContain('Админка');
+    expect(html).not.toContain('Клиент');
+    expect(html).not.toContain('role="menuitem"');
+  });
+
+  it('shows a client switch action for an admin in the admin interface', () => {
+    const html = renderToStaticMarkup(
+      <ProfileMenu
+        gender="female"
+        isAdmin
+        adminActionLabel="Клиент"
+        saving={false}
+        onGenderChange={vi.fn()}
+        onAdminAction={vi.fn()}
+      />
+    );
+
+    expect(html).toContain('Клиент');
+    expect(html).not.toContain('Админка');
     expect(html).not.toContain('role="menuitem"');
   });
 
@@ -83,9 +104,10 @@ describe('ProfileMenu', () => {
       <ProfileMenu
         gender="female"
         isAdmin
+        adminActionLabel="Клиент"
         saving
         onGenderChange={vi.fn()}
-        onOpenAdmin={vi.fn()}
+        onAdminAction={vi.fn()}
       />
     );
 

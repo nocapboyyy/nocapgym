@@ -205,12 +205,10 @@ describe('personalization and profile layout', () => {
     expect(selected).toContain('background: rgba(255, 181, 167, 0.12)');
   });
 
-  it('centers the cycle placeholder and preserves an admin back touch target', () => {
+  it('centers the cycle placeholder', () => {
     const cycle = cssRule('.cycle-placeholder');
-    const adminBack = cssRule('.topbar .icon-button');
 
     expect(cycle).toContain('min-height:');
     expect(cycle).toContain('place-items: center');
-    expect(adminBack).toContain('min-height: 44px');
   });
 });
