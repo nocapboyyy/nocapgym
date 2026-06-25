@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-06-22
+Last updated: 2026-06-25
 
 ## Working Features
 
@@ -14,7 +14,7 @@ Last updated: 2026-06-22
 - Plan exercises can be reordered in the wizard summary by dragging a handle.
 - Exercise drag reorder temporarily disables Telegram vertical swipes to prevent Mini App collapse.
 - The plan exercise summary keeps fixed-height cards and auto-scrolls while dragging through long lists.
-- Active workout screen with editable exercises and sets. Exercise cards are independently collapsible, the first card opens initially, and a palette-aligned indicator marks exercises whose sets are all complete.
+- Active workout screen with editable exercises and sets. When no workout is active, the Gym tab can open a plan picker and start a workout directly. Exercise cards are independently collapsible, the first card opens initially, and a palette-aligned indicator marks exercises whose sets are all complete.
 - Workout completion with optional template update.
 - Completed workout history.
 - History starts with a compact six-week month calendar. Completed workout days use dot markers; horizontal swipes or arrow controls change months without filtering history.

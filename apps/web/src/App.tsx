@@ -169,6 +169,21 @@ export function getSessionExerciseTitle(
   return exercises.find((item) => item.id === exercise.exerciseId)?.name ?? exercise.exercise?.name ?? 'Упражнение';
 }
 
+export function getExerciseCountLabel(count: number) {
+  const normalized = Math.abs(count);
+  const lastTwoDigits = normalized % 100;
+  const lastDigit = normalized % 10;
+  const form = lastTwoDigits >= 11 && lastTwoDigits <= 14
+    ? 'упражнений'
+    : lastDigit === 1
+      ? 'упражнение'
+      : lastDigit >= 2 && lastDigit <= 4
+        ? 'упражнения'
+        : 'упражнений';
+
+  return `${count} ${form}`;
+}
+
 export function getProgressExercises(history: WorkoutSession[]): Exercise[] {
   const exercisesById = new Map<string, Exercise>();
 
@@ -698,8 +713,11 @@ export function App() {
         <SessionPanel
           session={activeSession}
           exercises={exercises}
+          templates={templates}
           setSession={setActiveSession}
           onComplete={completeSession}
+          onStart={startSession}
+          onOpenTemplates={() => setView('templates')}
         />
       )}
 
@@ -1025,7 +1043,7 @@ function TemplatePanel(props: {
             <div className="card-header">
               <div>
                 <h3>{template.name}</h3>
-                <span className="muted">{template.exercises.length} упражнений</span>
+                <span className="muted">{getExerciseCountLabel(template.exercises.length)}</span>
               </div>
               <button onClick={() => props.onStart(template.id)}>
                 <Play size={18} /> Старт
@@ -1221,12 +1239,17 @@ function TemplatePanel(props: {
   );
 }
 
-function SessionPanel(props: {
+export function SessionPanel(props: {
   session: WorkoutSession | null;
   exercises: Exercise[];
+  templates: WorkoutTemplate[];
   setSession: (session: WorkoutSession | null) => void;
   onComplete: (applyToTemplate: boolean) => void;
+  onStart: (templateId: string) => void;
+  onOpenTemplates: () => void;
+  initialPlanPickerOpen?: boolean;
 }) {
+  const [isPlanPickerOpen, setIsPlanPickerOpen] = useState(props.initialPlanPickerOpen ?? false);
   const [expandedExercises, setExpandedExercises] = useState(() =>
     getInitialExerciseDisclosureState(props.session?.exercises.length ?? 0)
   );
@@ -1236,7 +1259,63 @@ function SessionPanel(props: {
   }, [props.session?.id]);
 
   if (!props.session) {
-    return <section className="panel empty">Запустите тренировку из вкладки «Планы».</section>;
+    return (
+      <section className="stack">
+        <section className="panel session-start-panel">
+          <div>
+            <h2>Готовы к тренировке?</h2>
+            <p className="muted">Выберите план и начните занятие прямо из зала.</p>
+          </div>
+          <button disabled={props.templates.length === 0} onClick={() => setIsPlanPickerOpen(true)}>
+            <Play size={18} /> Начать тренировку
+          </button>
+          {props.templates.length === 0 && (
+            <div className="session-start-empty">
+              <span>Планов пока нет.</span>
+              <button className="secondary" onClick={props.onOpenTemplates}>
+                <Plus size={18} /> Создать план
+              </button>
+            </div>
+          )}
+        </section>
+
+        {isPlanPickerOpen && (
+          <div className="modal-backdrop" role="presentation">
+            <section className="plan-dialog session-plan-dialog" role="dialog" aria-modal="true" aria-labelledby="session-plan-dialog-title">
+              <div className="dialog-header">
+                <span className="dialog-spacer" aria-hidden="true" />
+                <h2 id="session-plan-dialog-title">Выберите план</h2>
+                <button className="icon-button" aria-label="Закрыть" onClick={() => setIsPlanPickerOpen(false)}>
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="dialog-body session-plan-list">
+                {props.templates.map((template) => (
+                  <article className="card session-plan-card" key={template.id}>
+                    <div className="card-header">
+                      <div>
+                        <h3>{template.name}</h3>
+                        <span className="muted">{getExerciseCountLabel(template.exercises.length)}</span>
+                      </div>
+                      <button onClick={() => props.onStart(template.id)}>
+                        <Play size={18} /> Старт
+                      </button>
+                    </div>
+                    <div className="compact-list">
+                      {template.exercises.slice(0, 4).map((item) => (
+                        <span key={item.id ?? `${item.exerciseId}-${item.order}`}>
+                          {item.exercise?.name ?? props.exercises.find((exercise) => exercise.id === item.exerciseId)?.name ?? 'Упражнение'}
+                        </span>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </div>
+        )}
+      </section>
+    );
   }
 
   function updateExercise(index: number, patch: Partial<SessionExercise>) {

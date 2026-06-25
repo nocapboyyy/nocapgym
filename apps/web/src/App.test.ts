@@ -3,6 +3,7 @@ import {
   appendExpandedExerciseDisclosureState,
   getBottomControlsHidden,
   getHistorySessionPlanTitle,
+  getExerciseCountLabel,
   getInitialExerciseDisclosureState,
   getKeyboardViewportState,
   getMuscleGroupLabel,
@@ -74,6 +75,14 @@ describe('getSessionExerciseTitle', () => {
     };
 
     expect(getSessionExerciseTitle({ exerciseId: 'squat', exercise: oldExercise }, [oldExercise, selectedExercise])).toBe('Присед');
+  });
+});
+
+describe('getExerciseCountLabel', () => {
+  it('uses Russian plural forms for exercise counts', () => {
+    expect(getExerciseCountLabel(1)).toBe('1 упражнение');
+    expect(getExerciseCountLabel(2)).toBe('2 упражнения');
+    expect(getExerciseCountLabel(5)).toBe('5 упражнений');
   });
 });
 
