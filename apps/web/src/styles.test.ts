@@ -41,6 +41,18 @@ describe('active workout exercise disclosure', () => {
   });
 });
 
+describe('gym plan picker layout', () => {
+  it('lets the plan picker list scroll vertically inside the modal', () => {
+    const rule = cssRule('.session-plan-list');
+
+    expect(rule).toContain('min-height: 0');
+    expect(rule).toContain('overflow-y: auto');
+    expect(rule).toContain('overscroll-behavior: contain');
+    expect(rule).toContain('touch-action: pan-y');
+    expect(rule).toContain('-webkit-overflow-scrolling: touch');
+  });
+});
+
 describe('week calendar layout', () => {
   it('keeps all seven days in equal columns', () => {
     const rule = cssRule('.week-calendar-days');

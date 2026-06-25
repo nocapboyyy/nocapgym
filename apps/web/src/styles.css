@@ -729,6 +729,11 @@ h3 {
 
 .session-plan-list {
   align-content: start;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 .session-plan-card {

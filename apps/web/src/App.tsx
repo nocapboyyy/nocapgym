@@ -1302,7 +1302,7 @@ export function SessionPanel(props: {
                       </button>
                     </div>
                     <div className="compact-list">
-                      {template.exercises.slice(0, 4).map((item) => (
+                      {template.exercises.map((item) => (
                         <span key={item.id ?? `${item.exerciseId}-${item.order}`}>
                           {item.exercise?.name ?? props.exercises.find((exercise) => exercise.id === item.exerciseId)?.name ?? 'Упражнение'}
                         </span>

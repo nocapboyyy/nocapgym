@@ -29,7 +29,9 @@ describe('SessionPanel empty state', () => {
   const exercises: Exercise[] = [
     { id: 'bench', name: 'Жим лёжа', muscleGroup: 'chest', equipment: 'Штанга', techniqueNote: null, isHidden: false },
     { id: 'squat', name: 'Присед', muscleGroup: 'legs', equipment: 'Штанга', techniqueNote: null, isHidden: false },
-    { id: 'pullup', name: 'Подтягивания', muscleGroup: 'back', equipment: 'Турник', techniqueNote: null, isHidden: false }
+    { id: 'pullup', name: 'Подтягивания', muscleGroup: 'back', equipment: 'Турник', techniqueNote: null, isHidden: false },
+    { id: 'row', name: 'Тяга в наклоне', muscleGroup: 'back', equipment: 'Штанга', techniqueNote: null, isHidden: false },
+    { id: 'press', name: 'Жим стоя', muscleGroup: 'shoulders', equipment: 'Штанга', techniqueNote: null, isHidden: false }
   ];
 
   const templates: WorkoutTemplate[] = [
@@ -39,7 +41,10 @@ describe('SessionPanel empty state', () => {
       notes: null,
       exercises: [
         { id: 'template-exercise-1', exerciseId: 'bench', exercise: exercises[0], order: 0, sets: [] },
-        { id: 'template-exercise-2', exerciseId: 'pullup', exercise: exercises[2], order: 1, sets: [] }
+        { id: 'template-exercise-2', exerciseId: 'pullup', exercise: exercises[2], order: 1, sets: [] },
+        { id: 'template-exercise-3', exerciseId: 'squat', exercise: exercises[1], order: 2, sets: [] },
+        { id: 'template-exercise-4', exerciseId: 'row', exercise: exercises[3], order: 3, sets: [] },
+        { id: 'template-exercise-5', exerciseId: 'press', exercise: exercises[4], order: 4, sets: [] }
       ]
     }
   ];
@@ -61,9 +66,12 @@ describe('SessionPanel empty state', () => {
     expect(markup).toContain('Готовы к тренировке?');
     expect(markup).toContain('Начать тренировку');
     expect(markup).toContain('Верх тела');
-    expect(markup).toContain('2 упражнения');
+    expect(markup).toContain('5 упражнений');
     expect(markup).toContain('Жим лёжа');
     expect(markup).toContain('Подтягивания');
+    expect(markup).toContain('Присед');
+    expect(markup).toContain('Тяга в наклоне');
+    expect(markup).toContain('Жим стоя');
   });
 
   it('offers plan creation from the gym tab when there are no plans', () => {
