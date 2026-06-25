@@ -729,11 +729,6 @@ h3 {
 
 .session-plan-list {
   align-content: start;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  touch-action: pan-y;
-  -webkit-overflow-scrolling: touch;
 }
 
 .session-plan-card {
@@ -882,6 +877,14 @@ h3 {
 .exercise-picker-list {
   grid-auto-rows: max-content;
   overflow: hidden;
+}
+
+.dialog-body.session-plan-list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 .plan-form-body {

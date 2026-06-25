@@ -43,7 +43,7 @@ describe('active workout exercise disclosure', () => {
 
 describe('gym plan picker layout', () => {
   it('lets the plan picker list scroll vertically inside the modal', () => {
-    const rule = cssRule('.session-plan-list');
+    const rule = cssRule('.dialog-body.session-plan-list');
 
     expect(rule).toContain('min-height: 0');
     expect(rule).toContain('overflow-y: auto');
