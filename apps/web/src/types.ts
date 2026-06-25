@@ -2,6 +2,8 @@ export type SetType = 'warmup' | 'working';
 
 export type Gender = 'male' | 'female';
 
+export type MuscleGroup = 'neck' | 'shoulders' | 'chest' | 'arms' | 'abs' | 'back' | 'glutes' | 'legs';
+
 export type User = {
   id: string;
   telegramId: string;
@@ -13,7 +15,7 @@ export type User = {
 export type Exercise = {
   id: string;
   name: string;
-  muscleGroup: string;
+  muscleGroup: MuscleGroup | null;
   equipment: string;
   techniqueNote: string | null;
   isHidden: boolean;
