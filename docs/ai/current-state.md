@@ -1,10 +1,12 @@
 # Current State
 
-Last updated: 2026-06-25
+Last updated: 2026-07-14
 
 ## Working Features
 
-- Telegram Mini App auth with automatic user provisioning.
+- Telegram Mini App auth with automatic user provisioning. Signed `initData`
+  is accepted for up to 86400 seconds with 60 seconds of clock skew; expired
+  authorization asks the user to close and reopen the Mini App.
 - Explicit gender onboarding blocks the main app for new or existing users whose gender is still `null`.
 - Dev auth fallback for local browser testing.
 - User workout templates.
@@ -14,15 +16,21 @@ Last updated: 2026-06-25
 - Plan exercises can be reordered in the wizard summary by dragging a handle.
 - Exercise drag reorder temporarily disables Telegram vertical swipes to prevent Mini App collapse.
 - The plan exercise summary keeps fixed-height cards and auto-scrolls while dragging through long lists.
-- Active workout screen with editable exercises and sets. When no workout is active, the Gym tab can open a plan picker and start a workout directly. Exercise cards are independently collapsible, the first card opens initially, and a palette-aligned indicator marks exercises whose sets are all complete.
-- Workout completion with optional template update.
+- Active workout screen with editable exercises and sets. The single active workout is restored after a WebView reload; starting the same plan returns it, while starting another plan replaces only that unfinished workout. When no workout is active, the Gym tab can open a plan picker and start a workout directly. Exercise cards are independently collapsible, the first card opens initially, and a palette-aligned indicator marks exercises whose sets are all complete.
+- Workout completion with optional template update runs as one backend transaction and is idempotent.
+- Empty actual workout fields remain `null`; incomplete sets may omit actual
+  repetitions, while completed sets and template targets require positive
+  integer repetitions with Russian validation feedback.
 - Completed workout history.
+- History keeps the plan name captured when a workout starts, so later template renames or deletion do not rewrite old cards.
 - History starts with a compact six-week month calendar. Completed workout days use dot markers; horizontal swipes or arrow controls change months without filtering history.
 - History workout cards show the source plan name instead of a generic stats icon.
 - The Plans tab replaces the former four-metric summary strip with a static Monday-Sunday current-week calendar.
 - Completed workouts are marked by local start date; adjacent-month days remain visible but muted.
 - The shared summary strip is no longer shown on Gym or History.
 - Per-exercise progress from working sets.
+- Progress keeps separate session-backed entries when the same exercise is
+  trained more than once on one day.
 - Persistent icon-over-label bottom navigation is gender-aware: men have three primary tabs, while women also have `Цикл`.
 - The female-only `Цикл` screen is currently a no-data placeholder.
 - User JSON export/import remains supported by frontend logic and API, but its controls are temporarily hidden from the History UI.
@@ -37,6 +45,8 @@ Last updated: 2026-06-25
 - Bottom tabbar with iPhone safe-area handling.
 - Plan wizard modal with internal scroll containers.
 - Modal attempts to account for Telegram viewport height and keyboard resizing.
+- Plan and workout-picker modals trap keyboard focus, support Escape, and
+  restore focus to their opening controls.
 - When an editable field is focused or keyboard viewport shrink is detected, the bottom tabbar is hidden. Active workout finish controls are a normal block below the exercise list, not a sticky overlay.
 
 ## Known Risks / Watch Areas
@@ -46,11 +56,23 @@ Last updated: 2026-06-25
 - Gender onboarding, the profile popover, and both three-tab and four-tab navigation need real-device Telegram QA on iOS and Android.
 - `apps/web/src/App.tsx` is getting large. Future feature work may benefit from splitting panels/components.
 - SQLite is acceptable for v1 VPS deployment, but backups and migration discipline matter.
+- The active-session uniqueness migration intentionally fails if production already contains duplicate active sessions; inspect and resolve such rows from a verified backup before retrying deployment.
+- Session snapshot/index migrations are covered by legacy-row backfill,
+  SQLite query-plan integration tests, and the tested production migration
+  command with backup verification.
 - Local browser behavior may differ from Telegram Mini App behavior.
+- A Telegram WebView kept open for longer than 24 hours will receive an auth
+  expiry screen on its next API request and must be reopened to obtain fresh
+  `initData`.
 
 ## Operational Notes
 
-- Production-like deploy is currently manual through `git pull`, `npm run build`, and service restart.
+- Production deployment is documented in `docs/ai/production-runbook.md` and
+  uses Node.js 22. The API is stopped before the checked SQLite backup and
+  `prisma migrate deploy`, then restarted only after migration and integrity
+  checks succeed.
+- `npm run lint` checks API and web TypeScript, floating promises in production
+  code, React Hooks, and JSX accessibility.
 - Build runs Prisma client generation before API TypeScript compilation.
 - If API fails after deploy, check:
 

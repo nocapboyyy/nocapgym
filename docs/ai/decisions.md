@@ -2,6 +2,61 @@
 
 This is a short decision log. Keep entries small: date, decision, reason, consequence.
 
+## 2026-07-14 - Empty Actual Repetitions Are Null
+
+Decision: store an empty actual repetition field as `null`; allow it only while
+the set is incomplete, and require a positive integer when the set is marked
+completed. Template target repetitions are always positive integers.
+
+Reason: zero and empty have different meanings, and an invisible zero caused
+late validation failures during plan saving and workout completion.
+
+Consequence: frontend validation gives Russian feedback before the request,
+and backend validation enforces the completed-set rule independently.
+
+## 2026-07-14 - Production Migrations Use A Checked SQLite Backup
+
+Decision: run production on Node.js 22 and deploy migrations through the
+repository wrapper before restarting the API.
+
+Reason: SQLite needs a recoverable pre-migration state, and Prisma 6 does not
+officially support Node.js 24 or reliably create a missing SQLite file here.
+
+Consequence: deployment stops API writes, verifies a timestamped backup,
+applies migrations, checks database integrity, and leaves the service stopped
+on failure.
+
+## 2026-07-14 - Telegram Init Data Expires After 24 Hours
+
+Decision: accept signed Telegram Mini App `initData` for at most 86400 seconds,
+with 60 seconds of clock skew.
+
+Reason: bound replay risk without interrupting ordinary workout sessions.
+
+Consequence: an unusually long-lived WebView receives
+`TELEGRAM_AUTH_EXPIRED` on its next API request and asks the user to close and
+reopen the Mini App; local development auth is unchanged.
+
+## 2026-07-14 - Workout History Keeps The Original Plan Name
+
+Decision: copy the source plan name into each workout session when it starts.
+
+Reason: renaming or deleting a live template must not rewrite the meaning of completed history.
+
+Consequence: history prefers `templateNameSnapshot`, while the nullable template relation remains available for current navigation and is backfilled where an old linked plan still exists.
+
+## 2026-07-14 - One Active Workout Per User
+
+Decision: allow at most one active workout session per user. Repeated starts of
+the same plan return it; starting another plan replaces the unfinished active
+session atomically.
+
+Reason: users must be able to resume a workout after Telegram WebView reloads without creating duplicate active sessions.
+
+Consequence: SQLite enforces a partial unique index, active sessions are loaded
+during app startup, completed history is preserved when switching plans, and
+completion with optional template application is one idempotent transaction.
+
 ## 2026-06-22 - Gender Is Explicit User Profile Data
 
 Decision: store a nullable user-provided `male` or `female` value and require users with no value to choose one.

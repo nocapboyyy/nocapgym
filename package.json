@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.12 <23"
+  },
   "workspaces": [
     "apps/api",
     "apps/web"
@@ -12,11 +15,18 @@
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
     "prisma:generate": "npm run prisma:generate -w apps/api",
-    "prisma:migrate": "npm run prisma:migrate -w apps/api"
+    "prisma:migrate": "npm run prisma:migrate -w apps/api",
+    "prisma:migrate:deploy": "npm run prisma:migrate:deploy -w apps/api"
   },
   "devDependencies": {
-    "typescript": "^5.8.3"
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.7.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.64.0"
   }
 }
-
