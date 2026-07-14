@@ -5,6 +5,7 @@ describe('progress calculation', () => {
   it('uses only working completed sets and picks the best set per session', () => {
     const progress = buildExerciseProgress([
       {
+        sessionId: 'session-1',
         completedAt: new Date('2026-06-01T10:00:00Z'),
         sets: [
           { type: 'warmup', actualWeightKg: 80, actualReps: 8, completed: true },
@@ -13,6 +14,7 @@ describe('progress calculation', () => {
         ]
       },
       {
+        sessionId: 'session-2',
         completedAt: new Date('2026-06-08T10:00:00Z'),
         sets: [
           { type: 'working', actualWeightKg: 105, actualReps: 4, completed: false },
@@ -23,6 +25,7 @@ describe('progress calculation', () => {
 
     expect(progress).toEqual([
       {
+        sessionId: 'session-1',
         date: '2026-06-01',
         bestWeightKg: 100,
         bestReps: 5,
@@ -32,6 +35,7 @@ describe('progress calculation', () => {
         ]
       },
       {
+        sessionId: 'session-2',
         date: '2026-06-08',
         bestWeightKg: 102.5,
         bestReps: 6,
@@ -39,5 +43,22 @@ describe('progress calculation', () => {
       }
     ]);
   });
-});
 
+  it('keeps separate stable identifiers for two sessions completed on the same day', () => {
+    const progress = buildExerciseProgress([
+      {
+        sessionId: 'morning-session',
+        completedAt: new Date('2026-06-01T08:00:00Z'),
+        sets: [{ type: 'working', actualWeightKg: 50, actualReps: 10, completed: true }]
+      },
+      {
+        sessionId: 'evening-session',
+        completedAt: new Date('2026-06-01T18:00:00Z'),
+        sets: [{ type: 'working', actualWeightKg: 55, actualReps: 8, completed: true }]
+      }
+    ]);
+
+    expect(progress.map((point) => point.sessionId)).toEqual(['morning-session', 'evening-session']);
+    expect(progress.map((point) => point.date)).toEqual(['2026-06-01', '2026-06-01']);
+  });
+});

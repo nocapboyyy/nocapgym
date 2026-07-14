@@ -6,11 +6,13 @@ export type SessionSetProgressInput = {
 };
 
 export type SessionProgressInput = {
+  sessionId: string;
   completedAt: Date;
   sets: SessionSetProgressInput[];
 };
 
 export type ExerciseProgressPoint = {
+  sessionId: string;
   date: string;
   bestWeightKg: number;
   bestReps: number;
@@ -40,6 +42,7 @@ export function buildExerciseProgress(sessions: SessionProgressInput[]): Exercis
       })[0];
 
       return {
+        sessionId: session.sessionId,
         date: session.completedAt.toISOString().slice(0, 10),
         bestWeightKg: best.weightKg,
         bestReps: best.reps,
@@ -48,4 +51,3 @@ export function buildExerciseProgress(sessions: SessionProgressInput[]): Exercis
     })
     .filter((point): point is ExerciseProgressPoint => point !== null);
 }
-

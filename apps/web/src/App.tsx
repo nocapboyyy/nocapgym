@@ -19,8 +19,9 @@ import {
   UserRound,
   X
 } from 'lucide-react';
-import { api } from './api';
+import { api, getUserFacingApiError, telegramAuthExpiredEvent } from './api';
 import { initTelegramApp, setTelegramVerticalSwipesEnabled } from './telegram';
+import { useModalFocus } from './useModalFocus';
 import { MonthCalendar } from './MonthCalendar';
 import { WeekCalendar } from './WeekCalendar';
 import { CyclePanel, GenderOnboarding, ProfileMenu } from './UserPersonalization';
@@ -83,6 +84,7 @@ const userTabMetadata = {
 
 const genderSaveError = 'Не удалось сохранить пол. Попробуйте ещё раз.';
 const initialLoadError = 'Не удалось загрузить данные. Попробуйте ещё раз.';
+const telegramAuthExpiredError = 'Сессия Telegram устарела. Закройте и снова откройте приложение.';
 
 export const MUSCLE_GROUP_OPTIONS: Array<{ value: MuscleGroup; label: string }> = [
   { value: 'neck', label: 'Шея' },
@@ -138,8 +140,11 @@ export async function orchestrateGenderSave(input: {
   }
 }
 
-export function getHistorySessionPlanTitle(input: { template?: Pick<WorkoutTemplate, 'id' | 'name'> | null }) {
-  return input.template?.name?.trim() || 'План не найден';
+export function getHistorySessionPlanTitle(input: {
+  templateNameSnapshot?: string | null;
+  template?: Pick<WorkoutTemplate, 'id' | 'name'> | null;
+}) {
+  return input.templateNameSnapshot?.trim() || input.template?.name?.trim() || 'План не найден';
 }
 
 export function isSessionExerciseComplete(exercise: Pick<SessionExercise, 'sets'>) {
@@ -160,6 +165,10 @@ export function appendExpandedExerciseDisclosureState(state: boolean[]) {
 
 export function removeExerciseDisclosureState(state: boolean[], index: number) {
   return state.filter((_, currentIndex) => currentIndex !== index);
+}
+
+export function normalizeSessionExercises(exercises: SessionExercise[]) {
+  return exercises.map((exercise, order) => ({ ...exercise, order }));
 }
 
 export function getSessionExerciseTitle(
@@ -209,6 +218,29 @@ export function getProgressExercises(history: WorkoutSession[]): Exercise[] {
   return [...exercisesById.values()].sort((left, right) => left.name.localeCompare(right.name, 'ru'));
 }
 
+export async function fetchWorkoutData(admin: boolean, client: Pick<typeof api, 'get'> = api) {
+  const [exercises, templates, history, activeSession, adminExercises] = await Promise.all([
+    client.get<Exercise[]>('/api/exercises'),
+    client.get<WorkoutTemplate[]>('/api/templates'),
+    client.get<WorkoutSession[]>('/api/history'),
+    client.get<WorkoutSession | null>('/api/sessions/active'),
+    admin ? client.get<Exercise[]>('/api/admin/exercises') : Promise.resolve([])
+  ]);
+
+  return { exercises, templates, history, activeSession, adminExercises };
+}
+
+export async function completeWorkoutRequest(input: {
+  session: WorkoutSession;
+  applyToTemplate: boolean;
+  post: (path: string, body: unknown) => Promise<WorkoutSession>;
+}) {
+  return input.post(`/api/sessions/${input.session.id}/complete`, {
+    exercises: input.session.exercises,
+    applyToTemplate: input.applyToTemplate
+  });
+}
+
 export function isKeyboardEditingElement(input: { tagName: string; isContentEditable: boolean }) {
   return input.tagName === 'INPUT' || input.tagName === 'TEXTAREA' || input.isContentEditable;
 }
@@ -228,11 +260,40 @@ const emptyTemplate = (): Partial<WorkoutTemplate> & { exercises: TemplateExerci
 });
 
 function numberInputValue(value: number | null | undefined) {
-  return value === null || value === undefined || value === 0 ? '' : String(value);
+  return value === null || value === undefined ? '' : String(value);
 }
 
-function parseNumberInput(value: string) {
+export function parseOptionalNumberInput(value: string) {
+  return value.trim() === '' ? null : Number(value);
+}
+
+function parseRequiredNumberInput(value: string) {
   return value === '' ? 0 : Number(value);
+}
+
+export function getTemplateExerciseValidationError(exercise: TemplateExercise) {
+  if (exercise.sets.length === 0) return 'Добавьте хотя бы один подход.';
+  if (exercise.sets.some((set) => !Number.isInteger(set.targetReps) || (set.targetReps ?? 0) <= 0)) {
+    return 'Количество повторений должно быть целым числом больше нуля.';
+  }
+  return null;
+}
+
+export function getTemplateDraftValidationError(
+  draft: Partial<WorkoutTemplate> & { exercises: TemplateExercise[] }
+) {
+  if (!draft.name?.trim()) return 'Введите название тренировки.';
+  if (draft.exercises.length === 0) return 'Добавьте хотя бы одно упражнение.';
+  return draft.exercises.map(getTemplateExerciseValidationError).find(Boolean) ?? null;
+}
+
+export function getSessionCompletionValidationError(session: WorkoutSession) {
+  const invalidCompletedSet = session.exercises.some((exercise) =>
+    exercise.sets.some(
+      (set) => set.completed && (!Number.isInteger(set.actualReps) || (set.actualReps ?? 0) <= 0)
+    )
+  );
+  return invalidCompletedSet ? 'Для каждого завершённого подхода укажите повторы больше нуля.' : null;
 }
 
 export function getNextTemplateSet(sets: TemplateSet[]): TemplateSet {
@@ -320,12 +381,24 @@ export function App() {
   const [savingGender, setSavingGender] = useState(false);
   const [genderError, setGenderError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [telegramAuthExpired, setTelegramAuthExpired] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const previousUserTabRef = useRef<UserTab>('templates');
 
   useEffect(() => {
     initTelegramApp();
     void loadInitialData();
+    // The Telegram bootstrap must run once for each mounted WebView.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    function handleTelegramAuthExpired() {
+      setTelegramAuthExpired(true);
+    }
+
+    window.addEventListener(telegramAuthExpiredEvent, handleTelegramAuthExpired);
+    return () => window.removeEventListener(telegramAuthExpiredEvent, handleTelegramAuthExpired);
   }, []);
 
   useEffect(() => {
@@ -409,17 +482,13 @@ export function App() {
   }, [profileMenuOpen]);
 
   async function loadWorkoutData(admin: boolean) {
-    const [exerciseList, templateList, historyList, adminExerciseList] = await Promise.all([
-      api.get<Exercise[]>('/api/exercises'),
-      api.get<WorkoutTemplate[]>('/api/templates'),
-      api.get<WorkoutSession[]>('/api/history'),
-      admin ? api.get<Exercise[]>('/api/admin/exercises') : Promise.resolve([])
-    ]);
-
-    setExercises(exerciseList);
-    setTemplates(templateList);
-    setHistory(historyList);
-    setAdminExercises(adminExerciseList);
+    const data = await fetchWorkoutData(admin);
+    setExercises(data.exercises);
+    setTemplates(data.templates);
+    setHistory(data.history);
+    setActiveSession(data.activeSession);
+    setAdminExercises(data.adminExercises);
+    if (data.activeSession) setView('session');
   }
 
   async function loadInitialData() {
@@ -501,8 +570,11 @@ export function App() {
   }
 
   async function saveTemplate() {
-    if (!templateDraft.name?.trim()) return setMessage('Введите название тренировки');
-    if (templateDraft.exercises.length === 0) return setMessage('Добавьте хотя бы одно упражнение');
+    const validationError = getTemplateDraftValidationError(templateDraft);
+    if (validationError) {
+      setMessage(validationError);
+      return false;
+    }
 
     const payload = {
       name: templateDraft.name,
@@ -514,17 +586,27 @@ export function App() {
       }))
     };
 
-    if (editingTemplateId) {
-      await api.patch<WorkoutTemplate>(`/api/templates/${editingTemplateId}`, payload);
-      setMessage('Шаблон обновлён');
-    } else {
-      await api.post<WorkoutTemplate>('/api/templates', payload);
-      setMessage('Шаблон создан');
+    try {
+      if (editingTemplateId) {
+        await api.patch<WorkoutTemplate>(`/api/templates/${editingTemplateId}`, payload);
+        setMessage('Шаблон обновлён');
+      } else {
+        await api.post<WorkoutTemplate>('/api/templates', payload);
+        setMessage('Шаблон создан');
+      }
+    } catch (error) {
+      setMessage(getUserFacingApiError(error, 'Не удалось сохранить план. Попробуйте ещё раз.'));
+      return false;
     }
 
     setTemplateDraft(emptyTemplate());
     setEditingTemplateId(null);
-    await refreshTemplates();
+    try {
+      await refreshTemplates();
+    } catch {
+      setMessage('План сохранён, но список планов не обновился.');
+    }
+    return true;
   }
 
   async function startSession(templateId: string) {
@@ -535,17 +617,34 @@ export function App() {
 
   async function completeSession(applyToTemplate: boolean) {
     if (!activeSession) return;
-    const saved = await api.patch<WorkoutSession>(`/api/sessions/${activeSession.id}`, {
-      exercises: activeSession.exercises
-    });
-    const completed = await api.post<WorkoutSession>(`/api/sessions/${saved.id}/complete`);
-    if (applyToTemplate) {
-      await api.post(`/api/sessions/${completed.id}/apply-to-template`);
-      await refreshTemplates();
+    const validationError = getSessionCompletionValidationError(activeSession);
+    if (validationError) return setMessage(validationError);
+    try {
+      await completeWorkoutRequest({
+        session: activeSession,
+        applyToTemplate,
+        post: (path, body) => api.post<WorkoutSession>(path, body)
+      });
+    } catch (error) {
+      return setMessage(getUserFacingApiError(error, 'Не удалось завершить тренировку. Попробуйте ещё раз.'));
     }
     setActiveSession(null);
     setView('history');
-    setMessage(applyToTemplate ? 'Тренировка завершена, шаблон обновлён' : 'Тренировка завершена');
+    let templateRefreshFailed = false;
+    if (applyToTemplate) {
+      try {
+        await refreshTemplates();
+      } catch {
+        templateRefreshFailed = true;
+      }
+    }
+    setMessage(
+      templateRefreshFailed
+        ? 'Тренировка завершена, но список планов не обновился'
+        : applyToTemplate
+          ? 'Тренировка завершена, шаблон обновлён'
+          : 'Тренировка завершена'
+    );
     await refreshHistory();
   }
 
@@ -554,7 +653,7 @@ export function App() {
     setProgress(exerciseId ? await api.get<ProgressPoint[]>(`/api/progress/exercises/${exerciseId}`) : []);
   }
 
-  async function exportBackup() {
+  async function _exportBackup() {
     const payload = await api.get<unknown>('/api/export');
     const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
     const link = document.createElement('a');
@@ -564,7 +663,7 @@ export function App() {
     URL.revokeObjectURL(url);
   }
 
-  async function importBackup(file: File) {
+  async function _importBackup(file: File) {
     const payload = JSON.parse(await file.text());
     await api.post('/api/import', payload);
     await Promise.all([refreshTemplates(), refreshHistory()]);
@@ -587,6 +686,16 @@ export function App() {
   );
   const bottomControlsHidden = getBottomControlsHidden({ isKeyboardOpen: keyboardOpen, isEditableFocused: editableFocused });
   const startupState = getAppStartupState({ loading, user, loadError });
+
+  if (telegramAuthExpired) {
+    return (
+      <main className="app-shell centered">
+        <section className="panel empty" role="alert">
+          <p>{telegramAuthExpiredError}</p>
+        </section>
+      </main>
+    );
+  }
 
   function renderLoadError() {
     return (
@@ -754,7 +863,7 @@ function TemplatePanel(props: {
   setDraft: (draft: Partial<WorkoutTemplate> & { exercises: TemplateExercise[] }) => void;
   onEdit: (template: WorkoutTemplate) => void;
   onDelete: (id: string) => void;
-  onSave: () => void | Promise<void>;
+  onSave: () => Promise<boolean>;
   onStart: (id: string) => void;
   onCancelEdit: () => void;
 }) {
@@ -763,6 +872,7 @@ function TemplatePanel(props: {
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const [exerciseDraft, setExerciseDraft] = useState<TemplateExercise | null>(null);
   const [editingExerciseIndex, setEditingExerciseIndex] = useState<number | null>(null);
+  const [dialogError, setDialogError] = useState<string | null>(null);
   const [draggingExerciseIndex, setDraggingExerciseIndex] = useState<number | null>(null);
   const draftRef = useRef(props.draft);
   const summaryRef = useRef<HTMLDivElement | null>(null);
@@ -813,6 +923,7 @@ function TemplatePanel(props: {
     setSelectedExercise(null);
     setExerciseDraft(null);
     setEditingExerciseIndex(null);
+    setDialogError(null);
     setDialogStep('form');
     setIsDialogOpen(true);
   }
@@ -823,10 +934,14 @@ function TemplatePanel(props: {
     setSelectedExercise(null);
     setExerciseDraft(null);
     setEditingExerciseIndex(null);
+    setDialogError(null);
     props.onCancelEdit();
   }
 
+  const dialogRef = useModalFocus<HTMLElement>(isDialogOpen, closeDialog, dialogStep);
+
   function openExerciseDetail(exercise: Exercise) {
+    setDialogError(null);
     setSelectedExercise(exercise);
     setExerciseDraft({
       exerciseId: exercise.id,
@@ -838,6 +953,7 @@ function TemplatePanel(props: {
   }
 
   function editExerciseDetail(exerciseIndex: number) {
+    setDialogError(null);
     const exercise = props.draft.exercises[exerciseIndex];
     const catalogExercise = props.exercises.find((item) => item.id === exercise.exerciseId);
     setSelectedExercise(catalogExercise ?? exercise.exercise ?? null);
@@ -851,6 +967,7 @@ function TemplatePanel(props: {
 
   function updateExerciseSet(setIndex: number, patch: Partial<TemplateSet>) {
     if (!exerciseDraft) return;
+    setDialogError(null);
     setExerciseDraft({
       ...exerciseDraft,
       sets: exerciseDraft.sets.map((set, currentIndex) =>
@@ -861,6 +978,11 @@ function TemplatePanel(props: {
 
   function saveExerciseToPlan() {
     if (!exerciseDraft) return;
+    const validationError = getTemplateExerciseValidationError(exerciseDraft);
+    if (validationError) {
+      setDialogError(validationError);
+      return;
+    }
     props.setDraft({
       ...props.draft,
       exercises: getSavedTemplateExercises(props.draft.exercises, exerciseDraft, editingExerciseIndex)
@@ -868,6 +990,7 @@ function TemplatePanel(props: {
     setSelectedExercise(null);
     setExerciseDraft(null);
     setEditingExerciseIndex(null);
+    setDialogError(null);
     setDialogStep('form');
   }
 
@@ -996,6 +1119,7 @@ function TemplatePanel(props: {
   }
 
   function goBackFromDialogStep() {
+    setDialogError(null);
     if (dialogStep === 'exercise-detail') {
       setDialogStep(editingExerciseIndex === null ? 'exercise-list' : 'form');
       setSelectedExercise(null);
@@ -1008,11 +1132,7 @@ function TemplatePanel(props: {
   }
 
   async function savePlan() {
-    if (!props.draft.name?.trim() || props.draft.exercises.length === 0) {
-      await props.onSave();
-      return;
-    }
-    await props.onSave();
+    if (!(await props.onSave())) return;
     setIsDialogOpen(false);
     setDialogStep('form');
     setSelectedExercise(null);
@@ -1068,7 +1188,13 @@ function TemplatePanel(props: {
 
       {isDialogOpen && (
         <div className="modal-backdrop" role="presentation">
-          <section className="plan-dialog" role="dialog" aria-modal="true" aria-labelledby="plan-dialog-title">
+          <section
+            className="plan-dialog"
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="plan-dialog-title"
+          >
             <div className="dialog-header">
               {dialogStep === 'form' ? (
                 <span className="dialog-spacer" aria-hidden="true" />
@@ -1180,9 +1306,10 @@ function TemplatePanel(props: {
                             type="number"
                             inputMode="decimal"
                             step="0.5"
+                            min="0"
                             placeholder="0 кг"
                             value={numberInputValue(set.targetWeightKg)}
-                            onChange={(event) => updateExerciseSet(setIndex, { targetWeightKg: parseNumberInput(event.target.value) })}
+                            onChange={(event) => updateExerciseSet(setIndex, { targetWeightKg: parseRequiredNumberInput(event.target.value) })}
                           />
                           <span>кг</span>
                         </label>
@@ -1191,9 +1318,11 @@ function TemplatePanel(props: {
                             type="number"
                             inputMode="numeric"
                             step="1"
+                            min="1"
                             placeholder="0 п."
                             value={numberInputValue(set.targetReps)}
-                            onChange={(event) => updateExerciseSet(setIndex, { targetReps: parseNumberInput(event.target.value) })}
+                            aria-invalid={set.targetReps === null || !Number.isInteger(set.targetReps) || set.targetReps <= 0}
+                            onChange={(event) => updateExerciseSet(setIndex, { targetReps: parseOptionalNumberInput(event.target.value) })}
                           />
                           <span>п.</span>
                         </label>
@@ -1212,6 +1341,11 @@ function TemplatePanel(props: {
                       </div>
                     ))}
                   </div>
+                  {dialogError ? (
+                    <p className="form-error" role="alert">
+                      {dialogError}
+                    </p>
+                  ) : null}
                   <button
                     className="secondary"
                     onClick={() =>
@@ -1253,10 +1387,13 @@ export function SessionPanel(props: {
   const [expandedExercises, setExpandedExercises] = useState(() =>
     getInitialExerciseDisclosureState(props.session?.exercises.length ?? 0)
   );
+  const sessionExerciseCount = props.session?.exercises.length ?? 0;
+  const closePlanPicker = () => setIsPlanPickerOpen(false);
+  const planPickerDialogRef = useModalFocus<HTMLElement>(isPlanPickerOpen, closePlanPicker);
 
   useEffect(() => {
-    setExpandedExercises(getInitialExerciseDisclosureState(props.session?.exercises.length ?? 0));
-  }, [props.session?.id]);
+    setExpandedExercises(getInitialExerciseDisclosureState(sessionExerciseCount));
+  }, [props.session?.id, sessionExerciseCount]);
 
   if (!props.session) {
     return (
@@ -1281,11 +1418,17 @@ export function SessionPanel(props: {
 
         {isPlanPickerOpen && (
           <div className="modal-backdrop" role="presentation">
-            <section className="plan-dialog session-plan-dialog" role="dialog" aria-modal="true" aria-labelledby="session-plan-dialog-title">
+            <section
+              className="plan-dialog session-plan-dialog"
+              ref={planPickerDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="session-plan-dialog-title"
+            >
               <div className="dialog-header">
                 <span className="dialog-spacer" aria-hidden="true" />
                 <h2 id="session-plan-dialog-title">Выберите план</h2>
-                <button className="icon-button" aria-label="Закрыть" onClick={() => setIsPlanPickerOpen(false)}>
+                <button className="icon-button" aria-label="Закрыть" onClick={closePlanPicker}>
                   <X size={18} />
                 </button>
               </div>
@@ -1297,7 +1440,12 @@ export function SessionPanel(props: {
                         <h3>{template.name}</h3>
                         <span className="muted">{getExerciseCountLabel(template.exercises.length)}</span>
                       </div>
-                      <button onClick={() => props.onStart(template.id)}>
+                      <button
+                        onClick={() => {
+                          closePlanPicker();
+                          props.onStart(template.id);
+                        }}
+                      >
                         <Play size={18} /> Старт
                       </button>
                     </div>
@@ -1376,7 +1524,9 @@ export function SessionPanel(props: {
                       setExpandedExercises((state) => removeExerciseDisclosureState(state, exerciseIndex));
                       props.setSession({
                         ...props.session!,
-                        exercises: props.session!.exercises.filter((_, index) => index !== exerciseIndex)
+                        exercises: normalizeSessionExercises(
+                          props.session!.exercises.filter((_, index) => index !== exerciseIndex)
+                        )
                       });
                     }}
                   >
@@ -1395,10 +1545,11 @@ export function SessionPanel(props: {
                         type="number"
                         inputMode="decimal"
                         step="0.5"
+                        min="0"
                         placeholder="0 кг"
                         value={numberInputValue(set.actualWeightKg)}
                         onChange={(event) =>
-                          updateSet(exerciseIndex, setIndex, { actualWeightKg: parseNumberInput(event.target.value) })
+                          updateSet(exerciseIndex, setIndex, { actualWeightKg: parseOptionalNumberInput(event.target.value) })
                         }
                       />
                       <span>кг</span>
@@ -1408,10 +1559,11 @@ export function SessionPanel(props: {
                         type="number"
                         inputMode="numeric"
                         step="1"
+                        min="1"
                         placeholder="0 п."
                         value={numberInputValue(set.actualReps)}
                         onChange={(event) =>
-                          updateSet(exerciseIndex, setIndex, { actualReps: parseNumberInput(event.target.value) })
+                          updateSet(exerciseIndex, setIndex, { actualReps: parseOptionalNumberInput(event.target.value) })
                         }
                       />
                       <span>п.</span>
@@ -1521,7 +1673,7 @@ export function HistoryPanel(props: {
         </select>
         <div className="progress-list">
           {props.progress.map((point) => (
-            <div className="progress-row" key={point.date}>
+            <div className="progress-row" key={point.sessionId}>
               <span>{new Date(point.date).toLocaleDateString('ru-RU')}</span>
               <strong>
                 {point.bestWeightKg} кг x {point.bestReps}

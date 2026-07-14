@@ -57,6 +57,7 @@ describe('MonthCalendar', () => {
       {
         id: 'completed-workout',
         templateId: null,
+        templateNameSnapshot: null,
         startedAt: new Date(2026, 5, 18, 9).toISOString(),
         completedAt: new Date(2026, 5, 18, 10).toISOString(),
         status: 'completed',

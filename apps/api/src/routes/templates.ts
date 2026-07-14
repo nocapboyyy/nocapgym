@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { templatePayloadSchema } from '../schemas.js';
 import type { AppContext } from '../types.js';
+import { notFound } from '../errors.js';
 
 const templateInclude = {
   exercises: {
@@ -21,12 +22,12 @@ export async function registerTemplateRoutes(app: FastifyInstance, context: AppC
     });
   });
 
-  app.get<{ Params: { id: string } }>('/api/templates/:id', async (request, reply) => {
+  app.get<{ Params: { id: string } }>('/api/templates/:id', async (request) => {
     const template = await context.prisma.workoutTemplate.findFirst({
       where: { id: request.params.id, userId: request.user!.id },
       include: templateInclude
     });
-    if (!template) return reply.code(404).send({ message: 'Template not found' });
+    if (!template) throw notFound('План не найден');
     return template;
   });
 
@@ -50,12 +51,12 @@ export async function registerTemplateRoutes(app: FastifyInstance, context: AppC
     return reply.code(201).send(template);
   });
 
-  app.patch<{ Params: { id: string } }>('/api/templates/:id', async (request, reply) => {
+  app.patch<{ Params: { id: string } }>('/api/templates/:id', async (request) => {
     const payload = templatePayloadSchema.parse(request.body);
     const existing = await context.prisma.workoutTemplate.findFirst({
       where: { id: request.params.id, userId: request.user!.id }
     });
-    if (!existing) return reply.code(404).send({ message: 'Template not found' });
+    if (!existing) throw notFound('План не найден');
 
     const updated = await context.prisma.$transaction(async (tx) => {
       await tx.templateExercise.deleteMany({ where: { templateId: existing.id } });
@@ -86,4 +87,3 @@ export async function registerTemplateRoutes(app: FastifyInstance, context: AppC
     return reply.code(204).send();
   });
 }
-

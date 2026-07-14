@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { buildUserExportPayload } from '../domain/backup.js';
 import { buildExerciseProgress } from '../domain/progress.js';
-import { sessionPatchSchema } from '../schemas.js';
+import { conflict, isPrismaErrorCode, notFound } from '../errors.js';
+import { sessionCompleteSchema, sessionPatchSchema } from '../schemas.js';
 import type { AppContext } from '../types.js';
 
 const sessionInclude = {
@@ -17,6 +18,13 @@ const sessionInclude = {
 };
 
 export async function registerSessionRoutes(app: FastifyInstance, context: AppContext) {
+  app.get('/api/sessions/active', async (request) => {
+    return context.prisma.workoutSession.findFirst({
+      where: { userId: request.user!.id, status: 'active' },
+      include: sessionInclude
+    });
+  });
+
   app.post('/api/sessions/start', async (request, reply) => {
     const payload = z.object({ templateId: z.string() }).parse(request.body);
     const template = await context.prisma.workoutTemplate.findFirst({
@@ -28,52 +36,76 @@ export async function registerSessionRoutes(app: FastifyInstance, context: AppCo
         }
       }
     });
-    if (!template) return reply.code(404).send({ message: 'Template not found' });
+    if (!template) throw notFound('План не найден');
 
-    const session = await context.prisma.workoutSession.create({
-      data: {
-        userId: request.user!.id,
-        templateId: template.id,
-        exercises: {
-          create: template.exercises.map((exercise) => ({
-            exerciseId: exercise.exerciseId,
-            order: exercise.order,
-            sets: {
-              create: exercise.sets.map((set) => ({
-                type: set.type,
-                plannedWeightKg: set.targetWeightKg,
-                plannedReps: set.targetReps,
-                actualWeightKg: set.targetWeightKg,
-                actualReps: set.targetReps,
-                completed: false,
-                order: set.order
-              }))
-            }
-          }))
-        }
-      },
+    const activeSession = await context.prisma.workoutSession.findFirst({
+      where: { userId: request.user!.id, status: 'active' },
       include: sessionInclude
     });
-    return reply.code(201).send(session);
+    if (activeSession) return activeSession;
+
+    try {
+      const session = await context.prisma.workoutSession.create({
+        data: {
+          userId: request.user!.id,
+          templateId: template.id,
+          templateNameSnapshot: template.name,
+          exercises: {
+            create: template.exercises.map((exercise) => ({
+              exerciseId: exercise.exerciseId,
+              order: exercise.order,
+              sets: {
+                create: exercise.sets.map((set) => ({
+                  type: set.type,
+                  plannedWeightKg: set.targetWeightKg,
+                  plannedReps: set.targetReps,
+                  actualWeightKg: set.targetWeightKg,
+                  actualReps: set.targetReps,
+                  completed: false,
+                  order: set.order
+                }))
+              }
+            }))
+          }
+        },
+        include: sessionInclude
+      });
+      return reply.code(201).send(session);
+    } catch (error) {
+      if (isPrismaErrorCode(error, 'P2002')) {
+        const concurrentSession = await context.prisma.workoutSession.findFirst({
+          where: { userId: request.user!.id, status: 'active' },
+          include: sessionInclude
+        });
+        if (concurrentSession) return concurrentSession;
+      }
+      throw error;
+    }
   });
 
-  app.get<{ Params: { id: string } }>('/api/sessions/:id', async (request, reply) => {
+  app.get<{ Params: { id: string } }>('/api/sessions/:id', async (request) => {
     const session = await context.prisma.workoutSession.findFirst({
       where: { id: request.params.id, userId: request.user!.id },
       include: sessionInclude
     });
-    if (!session) return reply.code(404).send({ message: 'Session not found' });
+    if (!session) throw notFound('Тренировка не найдена');
     return session;
   });
 
-  app.patch<{ Params: { id: string } }>('/api/sessions/:id', async (request, reply) => {
+  app.patch<{ Params: { id: string } }>('/api/sessions/:id', async (request) => {
     const payload = sessionPatchSchema.parse(request.body);
     const existing = await context.prisma.workoutSession.findFirst({
       where: { id: request.params.id, userId: request.user!.id }
     });
-    if (!existing) return reply.code(404).send({ message: 'Session not found' });
+    if (!existing) throw notFound('Тренировка не найдена');
+    if (existing.status !== 'active') throw conflict('Завершённую тренировку нельзя изменить');
 
     const session = await context.prisma.$transaction(async (tx) => {
+      const activeSession = await tx.workoutSession.findFirst({
+        where: { id: existing.id, userId: request.user!.id, status: 'active' }
+      });
+      if (!activeSession) throw conflict('Завершённую тренировку нельзя изменить');
+
       await tx.sessionExercise.deleteMany({ where: { sessionId: existing.id } });
       return tx.workoutSession.update({
         where: { id: existing.id },
@@ -99,50 +131,67 @@ export async function registerSessionRoutes(app: FastifyInstance, context: AppCo
     return reply.code(204).send();
   });
 
-  app.post<{ Params: { id: string } }>('/api/sessions/:id/complete', async (request, reply) => {
-    const existing = await context.prisma.workoutSession.findFirst({
-      where: { id: request.params.id, userId: request.user!.id }
-    });
-    if (!existing) return reply.code(404).send({ message: 'Session not found' });
+  app.post<{ Params: { id: string } }>('/api/sessions/:id/complete', async (request) => {
+    const payload = sessionCompleteSchema.parse(request.body);
 
-    return context.prisma.workoutSession.update({
-      where: { id: existing.id },
-      data: { status: 'completed', completedAt: new Date() },
-      include: sessionInclude
-    });
-  });
+    return context.prisma.$transaction(async (tx) => {
+      const transition = await tx.workoutSession.updateMany({
+        where: { id: request.params.id, userId: request.user!.id, status: 'active' },
+        data: { status: 'completed', completedAt: new Date() }
+      });
+      const existing = await tx.workoutSession.findFirst({
+        where: { id: request.params.id, userId: request.user!.id },
+        include: sessionInclude
+      });
+      if (!existing) throw notFound('Тренировка не найдена');
+      if (transition.count === 0) return existing;
 
-  app.post<{ Params: { id: string } }>('/api/sessions/:id/apply-to-template', async (request, reply) => {
-    const session = await context.prisma.workoutSession.findFirst({
-      where: { id: request.params.id, userId: request.user!.id },
-      include: sessionInclude
-    });
-    if (!session || !session.templateId) return reply.code(404).send({ message: 'Template session not found' });
-
-    await context.prisma.$transaction(async (tx) => {
-      await tx.templateExercise.deleteMany({ where: { templateId: session.templateId! } });
-      await tx.workoutTemplate.update({
-        where: { id: session.templateId! },
+      await tx.sessionExercise.deleteMany({ where: { sessionId: existing.id } });
+      const completed = await tx.workoutSession.update({
+        where: { id: existing.id },
         data: {
           exercises: {
-            create: session.exercises.map((exercise) => ({
+            create: payload.exercises.map((exercise) => ({
               exerciseId: exercise.exerciseId,
               order: exercise.order,
-              sets: {
-                create: exercise.sets.map((set) => ({
-                  type: set.type,
-                  targetWeightKg: set.actualWeightKg ?? set.plannedWeightKg ?? 0,
-                  targetReps: set.actualReps ?? set.plannedReps ?? 1,
-                  order: set.order
-                }))
-              }
+              sets: { create: exercise.sets.map((set) => ({ ...set })) }
             }))
           }
-        }
+        },
+        include: sessionInclude
       });
-    });
 
-    return { ok: true };
+      if (payload.applyToTemplate) {
+        if (!completed.templateId) throw conflict('У тренировки нет исходного плана');
+        const ownedTemplate = await tx.workoutTemplate.findFirst({
+          where: { id: completed.templateId, userId: request.user!.id }
+        });
+        if (!ownedTemplate) throw conflict('Исходный план тренировки недоступен');
+
+        await tx.templateExercise.deleteMany({ where: { templateId: completed.templateId } });
+        await tx.workoutTemplate.update({
+          where: { id: completed.templateId },
+          data: {
+            exercises: {
+              create: completed.exercises.map((exercise) => ({
+                exerciseId: exercise.exerciseId,
+                order: exercise.order,
+                sets: {
+                  create: exercise.sets.map((set) => ({
+                    type: set.type,
+                    targetWeightKg: set.actualWeightKg ?? set.plannedWeightKg ?? 0,
+                    targetReps: set.actualReps ?? set.plannedReps ?? 1,
+                    order: set.order
+                  }))
+                }
+              }))
+            }
+          }
+        });
+      }
+
+      return completed;
+    });
   });
 
   app.get('/api/history', async (request) => {
@@ -168,6 +217,7 @@ export async function registerSessionRoutes(app: FastifyInstance, context: AppCo
 
     return buildExerciseProgress(
       sessionExercises.map((exercise) => ({
+        sessionId: exercise.session.id,
         completedAt: exercise.session.completedAt!,
         sets: exercise.sets.map((set) => ({
           type: set.type,
@@ -247,6 +297,7 @@ export async function registerSessionRoutes(app: FastifyInstance, context: AppCo
         await tx.workoutSession.create({
           data: {
             userId: request.user!.id,
+            templateNameSnapshot: session.templateNameSnapshot ?? null,
             startedAt: session.startedAt ? new Date(session.startedAt) : new Date(),
             completedAt: session.completedAt ? new Date(session.completedAt) : null,
             status: session.status === 'completed' ? 'completed' : 'active',

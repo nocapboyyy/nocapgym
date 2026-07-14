@@ -1,6 +1,31 @@
 import { getAuthHeaders } from './telegram';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
+export const telegramAuthExpiredEvent = 'telegram-auth-expired';
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly statusCode: number,
+    readonly code?: string
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+export async function readApiError(response: Response) {
+  const body = (await response.json().catch(() => null)) as { code?: string; message?: string } | null;
+  return new ApiError(body?.message ?? 'Ошибка запроса', response.status, body?.code);
+}
+
+export function getUserFacingApiError(error: unknown, fallback: string) {
+  if (!(error instanceof ApiError)) return fallback;
+  if (error.code === 'VALIDATION_ERROR') {
+    return 'Проверьте заполнение полей: некоторые значения недопустимы.';
+  }
+  return error.message;
+}
 
 export function buildRequestHeaders(
   authHeaders: Record<string, string>,
@@ -22,8 +47,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Ошибка запроса' }));
-    throw new Error(error.message ?? 'Ошибка запроса');
+    const error = await readApiError(response);
+    if (error.code === 'TELEGRAM_AUTH_EXPIRED' && typeof window !== 'undefined') {
+      window.dispatchEvent(new Event(telegramAuthExpiredEvent));
+    }
+    throw error;
   }
 
   if (response.status === 204) {
