@@ -47,11 +47,15 @@ Consequence: history prefers `templateNameSnapshot`, while the nullable template
 
 ## 2026-07-14 - One Active Workout Per User
 
-Decision: allow at most one active workout session per user and return it from repeated start requests.
+Decision: allow at most one active workout session per user. Repeated starts of
+the same plan return it; starting another plan replaces the unfinished active
+session atomically.
 
 Reason: users must be able to resume a workout after Telegram WebView reloads without creating duplicate active sessions.
 
-Consequence: SQLite enforces a partial unique index, active sessions are loaded during app startup, and completion with optional template application is one idempotent transaction.
+Consequence: SQLite enforces a partial unique index, active sessions are loaded
+during app startup, completed history is preserved when switching plans, and
+completion with optional template application is one idempotent transaction.
 
 ## 2026-06-22 - Gender Is Explicit User Profile Data
 

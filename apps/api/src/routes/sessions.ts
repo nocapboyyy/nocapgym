@@ -38,39 +38,53 @@ export async function registerSessionRoutes(app: FastifyInstance, context: AppCo
     });
     if (!template) throw notFound('План не найден');
 
-    const activeSession = await context.prisma.workoutSession.findFirst({
-      where: { userId: request.user!.id, status: 'active' },
-      include: sessionInclude
-    });
-    if (activeSession) return activeSession;
-
     try {
-      const session = await context.prisma.workoutSession.create({
-        data: {
-          userId: request.user!.id,
-          templateId: template.id,
-          templateNameSnapshot: template.name,
-          exercises: {
-            create: template.exercises.map((exercise) => ({
-              exerciseId: exercise.exerciseId,
-              order: exercise.order,
-              sets: {
-                create: exercise.sets.map((set) => ({
-                  type: set.type,
-                  plannedWeightKg: set.targetWeightKg,
-                  plannedReps: set.targetReps,
-                  actualWeightKg: set.targetWeightKg,
-                  actualReps: set.targetReps,
-                  completed: false,
-                  order: set.order
-                }))
-              }
-            }))
-          }
-        },
-        include: sessionInclude
+      const result = await context.prisma.$transaction(async (tx) => {
+        const activeSession = await tx.workoutSession.findFirst({
+          where: { userId: request.user!.id, status: 'active' },
+          include: sessionInclude
+        });
+
+        if (activeSession?.templateId === template.id) {
+          return { session: activeSession, created: false };
+        }
+
+        if (activeSession) {
+          await tx.workoutSession.deleteMany({
+            where: { id: activeSession.id, userId: request.user!.id, status: 'active' }
+          });
+        }
+
+        const session = await tx.workoutSession.create({
+          data: {
+            userId: request.user!.id,
+            templateId: template.id,
+            templateNameSnapshot: template.name,
+            exercises: {
+              create: template.exercises.map((exercise) => ({
+                exerciseId: exercise.exerciseId,
+                order: exercise.order,
+                sets: {
+                  create: exercise.sets.map((set) => ({
+                    type: set.type,
+                    plannedWeightKg: set.targetWeightKg,
+                    plannedReps: set.targetReps,
+                    actualWeightKg: set.targetWeightKg,
+                    actualReps: set.targetReps,
+                    completed: false,
+                    order: set.order
+                  }))
+                }
+              }))
+            }
+          },
+          include: sessionInclude
+        });
+
+        return { session, created: true };
       });
-      return reply.code(201).send(session);
+
+      return result.created ? reply.code(201).send(result.session) : result.session;
     } catch (error) {
       if (isPrismaErrorCode(error, 'P2002')) {
         const concurrentSession = await context.prisma.workoutSession.findFirst({

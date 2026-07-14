@@ -54,6 +54,55 @@ describe('session lifecycle integration', () => {
     expect(otherUser.json()).toBeNull();
   });
 
+  it('replaces an active workout when another plan is started without changing completed history', async () => {
+    const firstTemplate = await createTemplate(harness, '1001');
+    const firstSession = await startSession(harness, '1001', firstTemplate.id);
+    const completion = await harness.app.inject({
+      method: 'POST',
+      url: `/api/sessions/${firstSession.id}/complete`,
+      headers: harness.authHeaders('1001'),
+      payload: { exercises: firstSession.exercises, applyToTemplate: false }
+    });
+    expect(completion.statusCode).toBe(200);
+
+    const secondTemplate = await createTemplate(harness, '1001');
+    const activeBeforeReplacement = await startSession(harness, '1001', firstTemplate.id);
+    const replacement = await harness.app.inject({
+      method: 'POST',
+      url: '/api/sessions/start',
+      headers: harness.authHeaders('1001'),
+      payload: { templateId: secondTemplate.id }
+    });
+
+    expect(replacement.statusCode).toBe(201);
+    expect(replacement.json()).toMatchObject({ templateId: secondTemplate.id, status: 'active' });
+    expect(replacement.json().id).not.toBe(activeBeforeReplacement.id);
+    await expect(
+      harness.prisma.workoutSession.findUnique({ where: { id: activeBeforeReplacement.id } })
+    ).resolves.toBeNull();
+    await expect(
+      harness.prisma.workoutSession.count({ where: { userId: firstTemplate.userId, status: 'active' } })
+    ).resolves.toBe(1);
+    await expect(
+      harness.prisma.workoutSession.count({ where: { userId: firstTemplate.userId, status: 'completed' } })
+    ).resolves.toBe(1);
+  });
+
+  it('keeps the current workout when the same plan is started again', async () => {
+    const template = await createTemplate(harness, '1001');
+    const started = await startSession(harness, '1001', template.id);
+
+    const repeatedStart = await harness.app.inject({
+      method: 'POST',
+      url: '/api/sessions/start',
+      headers: harness.authHeaders('1001'),
+      payload: { templateId: template.id }
+    });
+
+    expect(repeatedStart.statusCode).toBe(200);
+    expect(repeatedStart.json().id).toBe(started.id);
+  });
+
   it('completes once, updates the owned template atomically, and rejects later edits', async () => {
     const template = await createTemplate(harness, '1001');
     const started = await startSession(harness, '1001', template.id);

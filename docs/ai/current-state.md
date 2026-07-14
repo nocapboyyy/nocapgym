@@ -16,7 +16,7 @@ Last updated: 2026-07-14
 - Plan exercises can be reordered in the wizard summary by dragging a handle.
 - Exercise drag reorder temporarily disables Telegram vertical swipes to prevent Mini App collapse.
 - The plan exercise summary keeps fixed-height cards and auto-scrolls while dragging through long lists.
-- Active workout screen with editable exercises and sets. The single active workout is restored after a WebView reload; repeated start requests return it instead of creating duplicates. When no workout is active, the Gym tab can open a plan picker and start a workout directly. Exercise cards are independently collapsible, the first card opens initially, and a palette-aligned indicator marks exercises whose sets are all complete.
+- Active workout screen with editable exercises and sets. The single active workout is restored after a WebView reload; starting the same plan returns it, while starting another plan replaces only that unfinished workout. When no workout is active, the Gym tab can open a plan picker and start a workout directly. Exercise cards are independently collapsible, the first card opens initially, and a palette-aligned indicator marks exercises whose sets are all complete.
 - Workout completion with optional template update runs as one backend transaction and is idempotent.
 - Empty actual workout fields remain `null`; incomplete sets may omit actual
   repetitions, while completed sets and template targets require positive

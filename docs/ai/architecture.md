@@ -61,8 +61,9 @@ Template/session children use cascade deletes where appropriate. Exercise deleti
 
 Each user can have at most one active workout session. SQLite enforces this
 with a partial unique index on `WorkoutSession.userId` for rows whose status is
-`active`. `GET /api/sessions/active` restores the current session, and repeated
-start requests return that session instead of creating another one.
+`active`. `GET /api/sessions/active` restores the current session. Starting the
+same plan again returns that session, while starting a different plan atomically
+replaces only the unfinished active session and leaves completed history intact.
 
 Only active sessions can be edited. Completion receives the final exercise
 state and an optional apply-to-template flag in one request; session updates,
