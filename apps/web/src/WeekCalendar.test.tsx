@@ -9,6 +9,7 @@ describe('WeekCalendar', () => {
       {
         id: 'completed-monday',
         templateId: null,
+        templateNameSnapshot: null,
         startedAt: new Date(2026, 5, 29, 9).toISOString(),
         completedAt: new Date(2026, 5, 29, 10).toISOString(),
         status: 'completed',

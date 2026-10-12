@@ -5,7 +5,9 @@ const config = {
   botToken: 'dev-token',
   adminTelegramIds: '1001',
   port: 4000,
-  allowDevAuth: true
+  allowDevAuth: true,
+  telegramInitDataMaxAgeSeconds: 86_400,
+  telegramInitDataClockSkewSeconds: 60
 };
 
 const adminUser = {

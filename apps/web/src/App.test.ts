@@ -1,12 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   appendExpandedExerciseDisclosureState,
+  completeWorkoutRequest,
+  fetchWorkoutData,
   getBottomControlsHidden,
   getHistorySessionPlanTitle,
   getExerciseCountLabel,
   getInitialExerciseDisclosureState,
   getKeyboardViewportState,
   getMuscleGroupLabel,
+  getSessionCompletionValidationError,
+  getTemplateDraftValidationError,
+  getTemplateExerciseValidationError,
   getAppStartupState,
   getDragAutoScrollDelta,
   getPlansCalendarVisible,
@@ -14,6 +19,7 @@ import {
   getSessionExerciseTitle,
   isSessionExerciseComplete,
   isKeyboardEditingElement,
+  normalizeSessionExercises,
   removeExerciseDisclosureState,
   reorderTemplateExercises,
   getSavedTemplateExercises,
@@ -21,9 +27,10 @@ import {
   getPreviousUserTabAfterGenderChange,
   MUSCLE_GROUP_OPTIONS,
   orchestrateGenderSave,
+  parseOptionalNumberInput,
   toggleExerciseDisclosureState
 } from './App';
-import type { Exercise, SessionSet, WorkoutSession } from './types';
+import type { Exercise, SessionExercise, SessionSet, WorkoutSession } from './types';
 
 describe('isSessionExerciseComplete', () => {
   const set = (completed: boolean): SessionSet => ({
@@ -62,6 +69,58 @@ describe('active workout disclosure state', () => {
 
   it('removes only the matching disclosure entry', () => {
     expect(removeExerciseDisclosureState([true, false, true], 1)).toEqual([true, true]);
+  });
+});
+
+describe('normalizeSessionExercises', () => {
+  it('closes order gaps after removing a session exercise', () => {
+    const exercises: SessionExercise[] = [
+      { exerciseId: 'bench', order: 0, sets: [] },
+      { exerciseId: 'squat', order: 2, sets: [] }
+    ];
+
+    expect(normalizeSessionExercises(exercises).map((exercise) => exercise.order)).toEqual([0, 1]);
+  });
+});
+
+describe('active workout API orchestration', () => {
+  const activeSession: WorkoutSession = {
+    id: 'session-1',
+    templateId: 'template-1',
+    templateNameSnapshot: 'План',
+    startedAt: '2026-07-14T10:00:00.000Z',
+    completedAt: null,
+    status: 'active',
+    exercises: []
+  };
+
+  it('loads the current active session with the initial workout data', async () => {
+    const responses: Record<string, unknown> = {
+      '/api/exercises': [],
+      '/api/templates': [],
+      '/api/history': [],
+      '/api/sessions/active': activeSession
+    };
+    const get = vi.fn(async (path: string) => responses[path]) as unknown as typeof import('./api').api.get;
+
+    const result = await fetchWorkoutData(false, { get });
+
+    expect(get).toHaveBeenCalledWith('/api/sessions/active');
+    expect(result.activeSession).toEqual(activeSession);
+  });
+
+  it('completes and applies a workout with one atomic API request', async () => {
+    const completed = { ...activeSession, status: 'completed' as const, completedAt: '2026-07-14T11:00:00.000Z' };
+    const post = vi.fn().mockResolvedValue(completed);
+
+    await expect(
+      completeWorkoutRequest({ session: activeSession, applyToTemplate: true, post })
+    ).resolves.toEqual(completed);
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenCalledWith('/api/sessions/session-1/complete', {
+      exercises: [],
+      applyToTemplate: true
+    });
   });
 });
 
@@ -120,7 +179,7 @@ describe('getProgressExercises', () => {
       actualWeightKg: 50, actualReps: 8, completed: true, order: 0, ...patch
     });
     const history: WorkoutSession[] = [{
-      id: 'session-1', templateId: null, startedAt: '2026-06-01T10:00:00Z',
+      id: 'session-1', templateId: null, templateNameSnapshot: null, startedAt: '2026-06-01T10:00:00Z',
       completedAt: '2026-06-01T11:00:00Z', status: 'completed',
       exercises: [
         { exerciseId: 'hidden', order: 0, exercise: exercises.hidden, sets: [set({})] },
@@ -276,6 +335,15 @@ describe('orchestrateGenderSave', () => {
 });
 
 describe('getHistorySessionPlanTitle', () => {
+  it('prefers the historical snapshot over a renamed live template', () => {
+    expect(
+      getHistorySessionPlanTitle({
+        templateNameSnapshot: 'Старое название',
+        template: { id: 'template-1', name: 'Новое название' }
+      })
+    ).toBe('Старое название');
+  });
+
   it('uses the completed session template name when available', () => {
     expect(getHistorySessionPlanTitle({ template: { id: 'template-1', name: 'Грудь и трицепс' } })).toBe('Грудь и трицепс');
   });
@@ -303,6 +371,62 @@ describe('getNextTemplateSet', () => {
     ]);
 
     expect(nextSet).toEqual({ type: 'working', targetWeightKg: 45, targetReps: 12, order: 1 });
+  });
+});
+
+describe('numeric workout input validation', () => {
+  it('represents an empty optional number as null instead of zero', () => {
+    expect(parseOptionalNumberInput('')).toBeNull();
+    expect(parseOptionalNumberInput('12')).toBe(12);
+  });
+
+  it('rejects empty or zero target reps before adding an exercise to a plan', () => {
+    const exercise = {
+      exerciseId: 'bench',
+      order: 0,
+      sets: [{ type: 'working' as const, targetWeightKg: 0, targetReps: null, order: 0 }]
+    };
+
+    expect(getTemplateExerciseValidationError(exercise)).toBe(
+      'Количество повторений должно быть целым числом больше нуля.'
+    );
+    expect(getTemplateDraftValidationError({ name: 'Грудь', exercises: [exercise] })).toBe(
+      'Количество повторений должно быть целым числом больше нуля.'
+    );
+  });
+
+  it('allows null reps for incomplete sets but rejects them for completed sets', () => {
+    const session: WorkoutSession = {
+      id: 'session-1',
+      templateId: null,
+      templateNameSnapshot: null,
+      startedAt: '2026-07-14T10:00:00Z',
+      completedAt: null,
+      status: 'active',
+      exercises: [
+        {
+          exerciseId: 'bench',
+          order: 0,
+          sets: [
+            {
+              type: 'working',
+              plannedWeightKg: null,
+              plannedReps: null,
+              actualWeightKg: null,
+              actualReps: null,
+              completed: false,
+              order: 0
+            }
+          ]
+        }
+      ]
+    };
+
+    expect(getSessionCompletionValidationError(session)).toBeNull();
+    session.exercises[0].sets[0].completed = true;
+    expect(getSessionCompletionValidationError(session)).toBe(
+      'Для каждого завершённого подхода укажите повторы больше нуля.'
+    );
   });
 });
 

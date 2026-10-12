@@ -19,3 +19,5 @@ npm run dev
 
 Для локальной разработки вне Telegram можно включить mock-пользователя в UI: если Telegram WebApp недоступен, frontend отправляет `x-dev-telegram-id`.
 
+Production deployment, SQLite backup, migrations and recovery are documented
+in [`docs/ai/production-runbook.md`](docs/ai/production-runbook.md).

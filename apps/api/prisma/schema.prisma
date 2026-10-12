@@ -72,6 +72,8 @@ model WorkoutTemplate {
   user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   exercises TemplateExercise[]
   sessions  WorkoutSession[]
+
+  @@index([userId, updatedAt])
 }
 
 model TemplateExercise {
@@ -83,6 +85,9 @@ model TemplateExercise {
   template WorkoutTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
   exercise Exercise        @relation(fields: [exerciseId], references: [id])
   sets     TemplateSet[]
+
+  @@index([templateId, order])
+  @@index([exerciseId])
 }
 
 model TemplateSet {
@@ -94,20 +99,30 @@ model TemplateSet {
   order              Int
 
   templateExercise TemplateExercise @relation(fields: [templateExerciseId], references: [id], onDelete: Cascade)
+
+  @@index([templateExerciseId, order])
 }
 
 model WorkoutSession {
-  id          String        @id @default(cuid())
-  userId      String
-  templateId  String?
-  startedAt   DateTime      @default(now())
-  completedAt DateTime?
-  status      SessionStatus @default(active)
+  id                   String        @id @default(cuid())
+  userId               String
+  templateId           String?
+  templateNameSnapshot String?
+  startedAt            DateTime      @default(now())
+  completedAt          DateTime?
+  status               SessionStatus @default(active)
 
   user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   template  WorkoutTemplate?  @relation(fields: [templateId], references: [id], onDelete: SetNull)
   exercises SessionExercise[]
+
+  @@index([userId, status, completedAt])
+  @@index([templateId])
 }
+
+// A partial unique index created in migration 20260714180000 ensures that each
+// user has at most one row whose status is "active". Prisma schema syntax does
+// not currently represent partial indexes.
 
 model SessionExercise {
   id         String @id @default(cuid())
@@ -118,6 +133,9 @@ model SessionExercise {
   session  WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   exercise Exercise       @relation(fields: [exerciseId], references: [id])
   sets     SessionSet[]
+
+  @@index([sessionId, order])
+  @@index([exerciseId, sessionId])
 }
 
 model SessionSet {
@@ -132,4 +150,6 @@ model SessionSet {
   order             Int
 
   sessionExercise SessionExercise @relation(fields: [sessionExerciseId], references: [id], onDelete: Cascade)
+
+  @@index([sessionExerciseId, order])
 }

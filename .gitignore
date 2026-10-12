@@ -3,6 +3,7 @@ dist
 coverage
 .superpowers/
 .worktrees/
+.DS_Store
 .env
 .env.local
 *.db

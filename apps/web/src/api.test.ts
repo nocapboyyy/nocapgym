@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildRequestHeaders } from './api';
+import { ApiError, buildRequestHeaders, getUserFacingApiError, readApiError } from './api';
 
 describe('buildRequestHeaders', () => {
   it('does not send json content-type for requests without a body', () => {
@@ -16,3 +16,27 @@ describe('buildRequestHeaders', () => {
   });
 });
 
+describe('readApiError', () => {
+  it('preserves the status and stable backend error code', async () => {
+    const error = await readApiError(
+      new Response(
+        JSON.stringify({
+          code: 'TELEGRAM_AUTH_EXPIRED',
+          message: 'Сессия Telegram устарела. Закройте и снова откройте приложение'
+        }),
+        { status: 401, headers: { 'content-type': 'application/json' } }
+      )
+    );
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ statusCode: 401, code: 'TELEGRAM_AUTH_EXPIRED' });
+  });
+});
+
+describe('getUserFacingApiError', () => {
+  it('turns backend validation failures into a clear Russian message', () => {
+    expect(getUserFacingApiError(new ApiError('Некорректные данные', 400, 'VALIDATION_ERROR'), 'Ошибка')).toBe(
+      'Проверьте заполнение полей: некоторые значения недопустимы.'
+    );
+  });
+});

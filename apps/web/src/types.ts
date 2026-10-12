@@ -25,7 +25,7 @@ export type TemplateSet = {
   id?: string;
   type: SetType;
   targetWeightKg: number;
-  targetReps: number;
+  targetReps: number | null;
   order: number;
 };
 
@@ -66,6 +66,7 @@ export type SessionExercise = {
 export type WorkoutSession = {
   id: string;
   templateId: string | null;
+  templateNameSnapshot: string | null;
   template?: Pick<WorkoutTemplate, 'id' | 'name' | 'notes'> | null;
   startedAt: string;
   completedAt: string | null;
@@ -74,6 +75,7 @@ export type WorkoutSession = {
 };
 
 export type ProgressPoint = {
+  sessionId: string;
   date: string;
   bestWeightKg: number;
   bestReps: number;

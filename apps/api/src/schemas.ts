@@ -39,16 +39,26 @@ export const exercisePayloadSchema = z.object({
   isHidden: z.boolean().optional()
 });
 
-export const sessionSetSchema = z.object({
-  id: z.string().optional(),
-  type: setTypeSchema,
-  plannedWeightKg: z.coerce.number().nonnegative().optional().nullable(),
-  plannedReps: z.coerce.number().int().positive().optional().nullable(),
-  actualWeightKg: z.coerce.number().nonnegative().optional().nullable(),
-  actualReps: z.coerce.number().int().positive().optional().nullable(),
-  completed: z.boolean().default(false),
-  order: z.coerce.number().int().nonnegative()
-});
+export const sessionSetSchema = z
+  .object({
+    id: z.string().optional(),
+    type: setTypeSchema,
+    plannedWeightKg: z.coerce.number().nonnegative().optional().nullable(),
+    plannedReps: z.coerce.number().int().positive().optional().nullable(),
+    actualWeightKg: z.coerce.number().nonnegative().optional().nullable(),
+    actualReps: z.coerce.number().int().positive().optional().nullable(),
+    completed: z.boolean().default(false),
+    order: z.coerce.number().int().nonnegative()
+  })
+  .superRefine((set, context) => {
+    if (set.completed && set.actualReps == null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['actualReps'],
+        message: 'Для завершённого подхода укажите количество повторений'
+      });
+    }
+  });
 
 export const sessionExerciseSchema = z.object({
   id: z.string().optional(),
@@ -59,4 +69,9 @@ export const sessionExerciseSchema = z.object({
 
 export const sessionPatchSchema = z.object({
   exercises: z.array(sessionExerciseSchema)
+});
+
+export const sessionCompleteSchema = z.object({
+  exercises: z.array(sessionExerciseSchema),
+  applyToTemplate: z.boolean().default(false)
 });

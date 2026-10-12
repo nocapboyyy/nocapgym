@@ -8,7 +8,9 @@ describe('CORS', () => {
         botToken: 'dev-token',
         adminTelegramIds: '',
         port: 4000,
-        allowDevAuth: true
+        allowDevAuth: true,
+        telegramInitDataMaxAgeSeconds: 86_400,
+        telegramInitDataClockSkewSeconds: 60
       }
     });
 
@@ -29,4 +31,3 @@ describe('CORS', () => {
     await app.close();
   });
 });
-

@@ -1,5 +1,6 @@
 import cors from '@fastify/cors';
 import Fastify from 'fastify';
+import { ZodError } from 'zod';
 import { readConfig } from './config.js';
 import { prisma as defaultPrisma } from './db.js';
 import { registerAuth } from './auth/plugin.js';
@@ -8,6 +9,7 @@ import { registerSessionRoutes } from './routes/sessions.js';
 import { registerTemplateRoutes } from './routes/templates.js';
 import { registerUserRoutes } from './routes/users.js';
 import type { AppContext } from './types.js';
+import { ApplicationError, mapPrismaError } from './errors.js';
 
 export async function buildServer(overrides: Partial<AppContext> = {}) {
   const context: AppContext = {
@@ -34,14 +36,47 @@ export async function buildServer(overrides: Partial<AppContext> = {}) {
   await registerSessionRoutes(app, context);
   await registerUserRoutes(app, context);
 
-  app.setErrorHandler((error: unknown, _request, reply) => {
-    if (error && typeof error === 'object' && 'issues' in error) {
-      return reply.code(400).send({ message: 'Validation error', issues: error.issues });
+  app.setErrorHandler((error: unknown, request, reply) => {
+    if (error instanceof ZodError) {
+      return reply.code(400).send({
+        code: 'VALIDATION_ERROR',
+        message: 'Некорректные данные',
+        issues: error.issues
+      });
     }
-    const message = error instanceof Error ? error.message : 'Internal server error';
-    app.log.error(error);
-    return reply.code(500).send({ message });
+
+    if (error instanceof ApplicationError) {
+      return reply.code(error.statusCode).send({ code: error.code, message: error.message });
+    }
+
+    const prismaError = mapPrismaError(error);
+    if (prismaError) {
+      request.log.warn({ err: error }, 'Handled database error');
+      return reply.code(prismaError.statusCode).send({ code: prismaError.code, message: prismaError.message });
+    }
+
+    if (hasClientErrorStatus(error)) {
+      const statusCode = error.statusCode;
+      return reply.code(statusCode).send({
+        code: statusCode === 404 ? 'NOT_FOUND' : 'BAD_REQUEST',
+        message: statusCode === 404 ? 'Ресурс не найден' : 'Некорректный запрос'
+      });
+    }
+
+    request.log.error({ err: error }, 'Unhandled request error');
+    return reply.code(500).send({ code: 'INTERNAL_ERROR', message: 'Внутренняя ошибка сервера' });
   });
 
   return app;
+}
+
+function hasClientErrorStatus(error: unknown): error is { statusCode: number } {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'statusCode' in error &&
+    typeof error.statusCode === 'number' &&
+    error.statusCode >= 400 &&
+    error.statusCode < 500
+  );
 }
