@@ -1,3 +1,4 @@
+import { templateInclude } from './templates.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { buildUserExportPayload } from '../domain/backup.js';
@@ -183,8 +184,9 @@ export async function registerSessionRoutes(app: FastifyInstance, context: AppCo
         if (!ownedTemplate) throw conflict('Исходный план тренировки недоступен');
 
         await tx.templateExercise.deleteMany({ where: { templateId: completed.templateId } });
-        await tx.workoutTemplate.update({
+        const updatedTemplate = await tx.workoutTemplate.update({
           where: { id: completed.templateId },
+          include: templateInclude,
           data: {
             exercises: {
               create: completed.exercises.map((exercise) => ({
@@ -202,6 +204,7 @@ export async function registerSessionRoutes(app: FastifyInstance, context: AppCo
             }
           }
         });
+        return { ...completed, updatedTemplate };
       }
 
       return completed;

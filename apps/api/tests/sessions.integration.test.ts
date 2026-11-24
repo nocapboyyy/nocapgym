@@ -128,7 +128,13 @@ describe('session lifecycle integration', () => {
     });
 
     expect(firstCompletion.statusCode).toBe(200);
-    expect(firstCompletion.json()).toMatchObject({ status: 'completed' });
+    expect(firstCompletion.json()).toMatchObject({
+      status: 'completed',
+      updatedTemplate: { id: template.id }
+    });
+    expect(firstCompletion.json().updatedTemplate.exercises[0].sets[0]).toMatchObject({
+      targetWeightKg: 62.5, targetReps: 10
+    });
     const firstCompletedAt = firstCompletion.json().completedAt;
     const updatedTemplate = await harness.prisma.workoutTemplate.findUniqueOrThrow({
       where: { id: template.id },

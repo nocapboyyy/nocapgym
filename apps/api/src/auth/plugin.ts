@@ -1,10 +1,11 @@
 import type { FastifyInstance } from 'fastify';
-import { forbidden, unauthorized } from '../errors.js';
+import { forbidden, isPrismaErrorCode, unauthorized } from '../errors.js';
 import {
   ExpiredTelegramInitDataError,
   getTelegramUserFromInitData,
   InvalidTelegramInitDataError,
-  isAdminTelegramId
+  isAdminTelegramId,
+  type TelegramUser
 } from './telegram.js';
 import type { AppContext } from '../types.js';
 
@@ -40,24 +41,36 @@ export async function registerAuth(app: FastifyInstance, context: AppContext) {
       throw unauthorized('AUTH_REQUIRED', 'Требуется авторизация через Telegram');
     }
 
-    const user = await context.prisma.user.upsert({
-      where: { telegramId: String(telegramUser.id) },
-      update: {
-        firstName: telegramUser.first_name ?? null,
-        lastName: telegramUser.last_name ?? null,
-        username: telegramUser.username ?? null
-      },
-      create: {
-        telegramId: String(telegramUser.id),
-        firstName: telegramUser.first_name ?? null,
-        lastName: telegramUser.last_name ?? null,
-        username: telegramUser.username ?? null
-      }
-    });
-
+    const user = await resolveUser(context.prisma, telegramUser);
     request.user = user;
     request.isAdmin = isAdminTelegramId(user.telegramId, context.config.adminTelegramIds);
   });
+}
+
+async function resolveUser(prisma: AppContext['prisma'], telegram: TelegramUser) {
+  const where = { telegramId: String(telegram.id) };
+  const profile = {
+    firstName: telegram.first_name ?? null,
+    lastName: telegram.last_name ?? null,
+    username: telegram.username ?? null
+  };
+
+  let user = await prisma.user.findUnique({ where });
+  if (!user) {
+    try {
+      return await prisma.user.create({ data: { ...where, ...profile } });
+    } catch (error) {
+      if (!isPrismaErrorCode(error, 'P2002')) throw error;
+      // Another first request may have created this account after our read.
+      user = await prisma.user.findUnique({ where });
+      if (!user) throw error;
+    }
+  }
+
+  if (user.firstName === profile.firstName && user.lastName === profile.lastName && user.username === profile.username) {
+    return user;
+  }
+  return prisma.user.update({ where, data: profile });
 }
 
 export async function requireAdmin(request: import('fastify').FastifyRequest) {

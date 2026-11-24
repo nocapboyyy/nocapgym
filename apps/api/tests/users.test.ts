@@ -15,7 +15,7 @@ const authenticatedUser = {
   telegramId: '1001',
   firstName: 'Dev',
   lastName: null,
-  username: 'dev_user',
+  username: 'dev',
   gender: null,
   createdAt: new Date('2026-06-22T00:00:00.000Z'),
   updatedAt: new Date('2026-06-22T00:00:00.000Z')
@@ -29,7 +29,7 @@ describe('user routes', () => {
       config,
       prisma: {
         user: {
-          upsert: vi.fn().mockResolvedValue(authenticatedUser),
+          findUnique: vi.fn().mockResolvedValue(authenticatedUser),
           update
         }
       } as any
@@ -62,7 +62,7 @@ describe('user routes', () => {
       config,
       prisma: {
         user: {
-          upsert: vi.fn().mockResolvedValue(authenticatedUser),
+          findUnique: vi.fn().mockResolvedValue(authenticatedUser),
           update
         }
       } as any

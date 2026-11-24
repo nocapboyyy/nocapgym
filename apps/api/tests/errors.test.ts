@@ -17,7 +17,7 @@ const authenticatedUser = {
   telegramId: '1001',
   firstName: 'Dev',
   lastName: null,
-  username: 'dev_user',
+  username: 'dev',
   gender: null,
   createdAt: new Date('2026-07-14T00:00:00.000Z'),
   updatedAt: new Date('2026-07-14T00:00:00.000Z')
@@ -90,7 +90,7 @@ describe('API error responses', () => {
     const app = await buildServer({
       config,
       prisma: {
-        user: { upsert: vi.fn().mockResolvedValue(authenticatedUser) }
+        user: { findUnique: vi.fn().mockResolvedValue(authenticatedUser) }
       } as any
     });
 
@@ -114,7 +114,7 @@ describe('API error responses', () => {
       config,
       prisma: {
         user: {
-          upsert: vi.fn().mockResolvedValue(authenticatedUser),
+          findUnique: vi.fn().mockResolvedValue(authenticatedUser),
           update
         }
       } as any
@@ -141,7 +141,7 @@ describe('API error responses', () => {
     const app = await buildServer({
       config,
       prisma: {
-        user: { upsert: vi.fn().mockResolvedValue(authenticatedUser) },
+        user: { findUnique: vi.fn().mockResolvedValue(authenticatedUser) },
         workoutSession: { findFirst: vi.fn().mockResolvedValue(null) }
       } as any
     });
@@ -166,7 +166,7 @@ describe('API error responses', () => {
     const app = await buildServer({
       config,
       prisma: {
-        user: { upsert: vi.fn().mockResolvedValue(authenticatedUser) },
+        user: { findUnique: vi.fn().mockResolvedValue(authenticatedUser) },
         workoutTemplate: { create: vi.fn().mockRejectedValue(prismaError) }
       } as any
     });
@@ -189,7 +189,7 @@ describe('API error responses', () => {
     const app = await buildServer({
       config,
       prisma: {
-        user: { upsert: vi.fn().mockRejectedValue(new Error('Secret schema and query details')) }
+        user: { findUnique: vi.fn().mockRejectedValue(new Error('Secret schema and query details')) }
       } as any
     });
 

@@ -1,49 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
-import {
-  Activity,
-  ArrowLeft,
-  CalendarDays,
-  Check,
-  ChevronDown,
-  CircleCheck,
-  Dumbbell,
-  GripVertical,
-  History,
-  ListPlus,
-  Pencil,
-  Play,
-  Plus,
-  Save,
-  Trash2,
-  UserRound,
-  X
-} from 'lucide-react';
+import { Activity, CalendarDays, Dumbbell, History, UserRound } from 'lucide-react';
 import { api, getUserFacingApiError, telegramAuthExpiredEvent } from './api';
-import { initTelegramApp, setTelegramVerticalSwipesEnabled } from './telegram';
-import { useModalFocus } from './useModalFocus';
-import { MonthCalendar } from './MonthCalendar';
+import { getAuthHeaders, initTelegramApp } from './telegram';
+import { recordCompletion, recordDeletion, recordTemplate } from './workout-cache';
+import { readStartup, readActiveSession } from './startup';
+import { ScreenData, ScreenDataContext, ReadStatus, useScreenData } from './screen-data';
 import { WeekCalendar } from './WeekCalendar';
 import { CyclePanel, GenderOnboarding, ProfileMenu } from './UserPersonalization';
-import {
-  getSafeViewAfterGenderChange,
-  getTabTitle,
-  getVisibleUserTabs
-} from './navigation';
+import { getSafeViewAfterGenderChange, getTabTitle, getVisibleUserTabs } from './navigation';
 import type { AppView, UserTab } from './navigation';
-import type {
-  Exercise,
-  Gender,
-  MuscleGroup,
-  ProgressPoint,
-  SessionExercise,
-  SessionSet,
-  TemplateExercise,
-  TemplateSet,
-  User,
-  WorkoutSession,
-  WorkoutTemplate
-} from './types';
+import type { Exercise, Gender, HistoryCard, HistoryPage, User, WorkoutSession } from './types';
+import { SessionDraft } from './session-draft';
+import { completeWorkoutRequest, getSessionCompletionValidationError, GymScreen } from './GymScreen';
+import { PlansScreen } from './PlansScreen';
+import { HistoryPanel } from './HistoryPanel';
+import { AdminPanel } from './AdminPanel';
 
 export function getKeyboardViewportState(input: {
   windowInnerHeight: number;
@@ -86,21 +57,6 @@ const genderSaveError = 'Не удалось сохранить пол. Попр
 const initialLoadError = 'Не удалось загрузить данные. Попробуйте ещё раз.';
 const telegramAuthExpiredError = 'Сессия Telegram устарела. Закройте и снова откройте приложение.';
 
-export const MUSCLE_GROUP_OPTIONS: Array<{ value: MuscleGroup; label: string }> = [
-  { value: 'neck', label: 'Шея' },
-  { value: 'shoulders', label: 'Плечи' },
-  { value: 'chest', label: 'Грудь' },
-  { value: 'arms', label: 'Руки' },
-  { value: 'abs', label: 'Пресс' },
-  { value: 'back', label: 'Спина' },
-  { value: 'glutes', label: 'Ягодицы' },
-  { value: 'legs', label: 'Ноги' }
-];
-
-export function getMuscleGroupLabel(muscleGroup: MuscleGroup | null) {
-  return MUSCLE_GROUP_OPTIONS.find((option) => option.value === muscleGroup)?.label ?? 'Группа не выбрана';
-}
-
 export function getPreviousUserTabAfterGenderChange(previousTab: UserTab, gender: Gender): UserTab {
   return previousTab === 'cycle' && gender === 'male' ? 'templates' : previousTab;
 }
@@ -140,107 +96,6 @@ export async function orchestrateGenderSave(input: {
   }
 }
 
-export function getHistorySessionPlanTitle(input: {
-  templateNameSnapshot?: string | null;
-  template?: Pick<WorkoutTemplate, 'id' | 'name'> | null;
-}) {
-  return input.templateNameSnapshot?.trim() || input.template?.name?.trim() || 'План не найден';
-}
-
-export function isSessionExerciseComplete(exercise: Pick<SessionExercise, 'sets'>) {
-  return exercise.sets.length > 0 && exercise.sets.every((set) => set.completed);
-}
-
-export function getInitialExerciseDisclosureState(count: number) {
-  return Array.from({ length: count }, (_, index) => index === 0);
-}
-
-export function toggleExerciseDisclosureState(state: boolean[], index: number) {
-  return state.map((isExpanded, currentIndex) => (currentIndex === index ? !isExpanded : isExpanded));
-}
-
-export function appendExpandedExerciseDisclosureState(state: boolean[]) {
-  return [...state, true];
-}
-
-export function removeExerciseDisclosureState(state: boolean[], index: number) {
-  return state.filter((_, currentIndex) => currentIndex !== index);
-}
-
-export function normalizeSessionExercises(exercises: SessionExercise[]) {
-  return exercises.map((exercise, order) => ({ ...exercise, order }));
-}
-
-export function getSessionExerciseTitle(
-  exercise: Pick<SessionExercise, 'exerciseId' | 'exercise'>,
-  exercises: Exercise[]
-) {
-  return exercises.find((item) => item.id === exercise.exerciseId)?.name ?? exercise.exercise?.name ?? 'Упражнение';
-}
-
-export function getExerciseCountLabel(count: number) {
-  const normalized = Math.abs(count);
-  const lastTwoDigits = normalized % 100;
-  const lastDigit = normalized % 10;
-  const form = lastTwoDigits >= 11 && lastTwoDigits <= 14
-    ? 'упражнений'
-    : lastDigit === 1
-      ? 'упражнение'
-      : lastDigit >= 2 && lastDigit <= 4
-        ? 'упражнения'
-        : 'упражнений';
-
-  return `${count} ${form}`;
-}
-
-export function getProgressExercises(history: WorkoutSession[]): Exercise[] {
-  const exercisesById = new Map<string, Exercise>();
-
-  for (const session of history) {
-    if (session.status !== 'completed') continue;
-
-    for (const sessionExercise of session.exercises) {
-      if (
-        sessionExercise.exercise &&
-        sessionExercise.sets.some(
-          (set) =>
-            set.type === 'working' &&
-            set.completed &&
-            set.actualWeightKg !== null &&
-            set.actualReps !== null
-        )
-      ) {
-        exercisesById.set(sessionExercise.exerciseId, sessionExercise.exercise);
-      }
-    }
-  }
-
-  return [...exercisesById.values()].sort((left, right) => left.name.localeCompare(right.name, 'ru'));
-}
-
-export async function fetchWorkoutData(admin: boolean, client: Pick<typeof api, 'get'> = api) {
-  const [exercises, templates, history, activeSession, adminExercises] = await Promise.all([
-    client.get<Exercise[]>('/api/exercises'),
-    client.get<WorkoutTemplate[]>('/api/templates'),
-    client.get<WorkoutSession[]>('/api/history'),
-    client.get<WorkoutSession | null>('/api/sessions/active'),
-    admin ? client.get<Exercise[]>('/api/admin/exercises') : Promise.resolve([])
-  ]);
-
-  return { exercises, templates, history, activeSession, adminExercises };
-}
-
-export async function completeWorkoutRequest(input: {
-  session: WorkoutSession;
-  applyToTemplate: boolean;
-  post: (path: string, body: unknown) => Promise<WorkoutSession>;
-}) {
-  return input.post(`/api/sessions/${input.session.id}/complete`, {
-    exercises: input.session.exercises,
-    applyToTemplate: input.applyToTemplate
-  });
-}
-
 export function isKeyboardEditingElement(input: { tagName: string; isContentEditable: boolean }) {
   return input.tagName === 'INPUT' || input.tagName === 'TEXTAREA' || input.isContentEditable;
 }
@@ -253,126 +108,50 @@ function isEditableElement(element: Element | null) {
   });
 }
 
-const emptyTemplate = (): Partial<WorkoutTemplate> & { exercises: TemplateExercise[] } => ({
-  name: '',
-  notes: '',
-  exercises: []
-});
-
-function numberInputValue(value: number | null | undefined) {
-  return value === null || value === undefined ? '' : String(value);
-}
-
-export function parseOptionalNumberInput(value: string) {
-  return value.trim() === '' ? null : Number(value);
-}
-
-function parseRequiredNumberInput(value: string) {
-  return value === '' ? 0 : Number(value);
-}
-
-export function getTemplateExerciseValidationError(exercise: TemplateExercise) {
-  if (exercise.sets.length === 0) return 'Добавьте хотя бы один подход.';
-  if (exercise.sets.some((set) => !Number.isInteger(set.targetReps) || (set.targetReps ?? 0) <= 0)) {
-    return 'Количество повторений должно быть целым числом больше нуля.';
-  }
-  return null;
-}
-
-export function getTemplateDraftValidationError(
-  draft: Partial<WorkoutTemplate> & { exercises: TemplateExercise[] }
-) {
-  if (!draft.name?.trim()) return 'Введите название тренировки.';
-  if (draft.exercises.length === 0) return 'Добавьте хотя бы одно упражнение.';
-  return draft.exercises.map(getTemplateExerciseValidationError).find(Boolean) ?? null;
-}
-
-export function getSessionCompletionValidationError(session: WorkoutSession) {
-  const invalidCompletedSet = session.exercises.some((exercise) =>
-    exercise.sets.some(
-      (set) => set.completed && (!Number.isInteger(set.actualReps) || (set.actualReps ?? 0) <= 0)
-    )
-  );
-  return invalidCompletedSet ? 'Для каждого завершённого подхода укажите повторы больше нуля.' : null;
-}
-
-export function getNextTemplateSet(sets: TemplateSet[]): TemplateSet {
-  const previousSet = sets.at(-1);
-
-  return {
-    type: previousSet?.type ?? 'working',
-    targetWeightKg: previousSet?.targetWeightKg ?? 0,
-    targetReps: previousSet?.targetReps ?? 8,
-    order: sets.length
-  };
-}
-
-export function getSavedTemplateExercises(
-  exercises: TemplateExercise[],
-  exerciseDraft: TemplateExercise,
-  editingExerciseIndex: number | null
-) {
-  const savedExercise = {
-    ...exerciseDraft,
-    sets: exerciseDraft.sets.map((set, order) => ({ ...set, order }))
-  };
-
-  const nextExercises =
-    editingExerciseIndex === null
-      ? [...exercises, savedExercise]
-      : exercises.map((exercise, index) => (index === editingExerciseIndex ? savedExercise : exercise));
-
-  return nextExercises.map((exercise, order) => ({ ...exercise, order }));
-}
-
-export function reorderTemplateExercises(exercises: TemplateExercise[], fromIndex: number, toIndex: number) {
-  if (
-    fromIndex < 0 ||
-    toIndex < 0 ||
-    fromIndex >= exercises.length ||
-    toIndex >= exercises.length ||
-    fromIndex === toIndex
-  ) {
-    return exercises.map((exercise, order) => ({ ...exercise, order }));
-  }
-
-  const nextExercises = [...exercises];
-  const [movedExercise] = nextExercises.splice(fromIndex, 1);
-  nextExercises.splice(toIndex, 0, movedExercise);
-
-  return nextExercises.map((exercise, order) => ({ ...exercise, order }));
-}
-
-export function getDragAutoScrollDelta(input: { pointerY: number; containerTop: number; containerBottom: number }) {
-  const edgeSize = 52;
-  const maxDelta = 18;
-
-  if (input.pointerY < input.containerTop + edgeSize) {
-    const distance = Math.max(0, input.pointerY - input.containerTop);
-    return -Math.ceil(((edgeSize - distance) / edgeSize) * maxDelta);
-  }
-
-  if (input.pointerY > input.containerBottom - edgeSize) {
-    const distance = Math.max(0, input.containerBottom - input.pointerY);
-    return Math.ceil(((edgeSize - distance) / edgeSize) * maxDelta);
-  }
-
-  return 0;
+function accountKey() {
+  const headers = getAuthHeaders();
+  return headers['x-telegram-init-data'] || headers['x-dev-telegram-id'];
 }
 
 export function App() {
+  const [account, setAccount] = useState(accountKey);
+  useEffect(() => {
+    const syncAccount = () => setAccount(accountKey());
+    window.addEventListener('storage', syncAccount);
+    window.addEventListener('focus', syncAccount);
+    document.addEventListener('visibilitychange', syncAccount);
+    return () => {
+      window.removeEventListener('storage', syncAccount);
+      window.removeEventListener('focus', syncAccount);
+      document.removeEventListener('visibilitychange', syncAccount);
+    };
+  }, []);
+  return <AccountApp key={account} />;
+}
+
+function AccountApp() {
+  const [store] = useState(() => new ScreenData());
+  const [expired, setExpired] = useState(false);
+  useEffect(() => {
+    function expire() {
+      setExpired(true);
+      store.invalidate('');
+    }
+    window.addEventListener(telegramAuthExpiredEvent, expire);
+    return () => window.removeEventListener(telegramAuthExpiredEvent, expire);
+  }, [store]);
+  if (expired) return <main className="app-shell centered"><p role="alert">{telegramAuthExpiredError}</p></main>;
+  return <ScreenDataContext.Provider value={store}><WorkoutApp store={store} /></ScreenDataContext.Provider>;
+}
+
+function WorkoutApp({ store }: { store: ScreenData }) {
   const [view, setView] = useState<AppView>('templates');
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [adminExercises, setAdminExercises] = useState<Exercise[]>([]);
-  const [templates, setTemplates] = useState<WorkoutTemplate[]>([]);
-  const [history, setHistory] = useState<WorkoutSession[]>([]);
-  const [activeSession, setActiveSession] = useState<WorkoutSession | null>(null);
-  const [templateDraft, setTemplateDraft] = useState(emptyTemplate());
-  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [draft] = useState(() => new SessionDraft());
+  const [changedExercise, setChangedExercise] = useState<Exercise | null>(null);
   const [selectedProgressExerciseId, setSelectedProgressExerciseId] = useState('');
-  const [progress, setProgress] = useState<ProgressPoint[]>([]);
+
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
@@ -381,7 +160,11 @@ export function App() {
   const [savingGender, setSavingGender] = useState(false);
   const [genderError, setGenderError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [telegramAuthExpired, setTelegramAuthExpired] = useState(false);
+  const [pageCursors, setPageCursors] = useState<string[]>([]);
+  const ready = !loading && !loadError && Boolean(user?.gender);
+  const adminCatalog = useScreenData<Exercise[]>(ready && isAdmin && view === 'admin' ? '/api/admin/exercises' : undefined);
+  const completingSession = useRef<string | null>(null);
+  const pendingStartup = useRef<ReturnType<typeof readStartup> | null>(null);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const previousUserTabRef = useRef<UserTab>('templates');
 
@@ -390,15 +173,6 @@ export function App() {
     void loadInitialData();
     // The Telegram bootstrap must run once for each mounted WebView.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    function handleTelegramAuthExpired() {
-      setTelegramAuthExpired(true);
-    }
-
-    window.addEventListener(telegramAuthExpiredEvent, handleTelegramAuthExpired);
-    return () => window.removeEventListener(telegramAuthExpiredEvent, handleTelegramAuthExpired);
   }, []);
 
   useEffect(() => {
@@ -481,29 +255,25 @@ export function App() {
     };
   }, [profileMenuOpen]);
 
-  async function loadWorkoutData(admin: boolean) {
-    const data = await fetchWorkoutData(admin);
-    setExercises(data.exercises);
-    setTemplates(data.templates);
-    setHistory(data.history);
-    setActiveSession(data.activeSession);
-    setAdminExercises(data.adminExercises);
-    if (data.activeSession) setView('session');
+  function restoreSession(session: WorkoutSession | null) {
+    draft.restore(session);
+    setView(session ? 'session' : 'templates');
   }
 
   async function loadInitialData() {
+    if (pendingStartup.current) return;
     setLoading(true);
     setLoadError(null);
     try {
-      const me = await api.get<{ user: User; isAdmin: boolean }>('/api/me');
-      setUser(me.user);
-      setIsAdmin(me.isAdmin);
-      if (me.user.gender !== null) {
-        await loadWorkoutData(me.isAdmin);
-      }
+      pendingStartup.current = readStartup();
+      const initial = await pendingStartup.current;
+      setUser(initial.user);
+      setIsAdmin(initial.isAdmin);
+      restoreSession(initial.session);
     } catch {
       setLoadError(initialLoadError);
     } finally {
+      pendingStartup.current = null;
       setLoading(false);
     }
   }
@@ -529,7 +299,7 @@ export function App() {
       loadWorkoutData: async () => {
         setLoading(true);
         try {
-          await loadWorkoutData(isAdmin);
+          restoreSession(await readActiveSession());
         } finally {
           setLoading(false);
         }
@@ -561,96 +331,41 @@ export function App() {
     }
   }
 
-  async function refreshTemplates() {
-    setTemplates(await api.get<WorkoutTemplate[]>('/api/templates'));
-  }
-
-  async function refreshHistory() {
-    setHistory(await api.get<WorkoutSession[]>('/api/history'));
-  }
-
-  async function saveTemplate() {
-    const validationError = getTemplateDraftValidationError(templateDraft);
-    if (validationError) {
-      setMessage(validationError);
-      return false;
-    }
-
-    const payload = {
-      name: templateDraft.name,
-      notes: templateDraft.notes,
-      exercises: templateDraft.exercises.map((exercise) => ({
-        exerciseId: exercise.exerciseId,
-        order: exercise.order,
-        sets: exercise.sets
-      }))
-    };
-
-    try {
-      if (editingTemplateId) {
-        await api.patch<WorkoutTemplate>(`/api/templates/${editingTemplateId}`, payload);
-        setMessage('Шаблон обновлён');
-      } else {
-        await api.post<WorkoutTemplate>('/api/templates', payload);
-        setMessage('Шаблон создан');
-      }
-    } catch (error) {
-      setMessage(getUserFacingApiError(error, 'Не удалось сохранить план. Попробуйте ещё раз.'));
-      return false;
-    }
-
-    setTemplateDraft(emptyTemplate());
-    setEditingTemplateId(null);
-    try {
-      await refreshTemplates();
-    } catch {
-      setMessage('План сохранён, но список планов не обновился.');
-    }
-    return true;
+  function resetHistoryPages() {
+    setPageCursors([]);
+    store.invalidate('/api/history/page');
   }
 
   async function startSession(templateId: string) {
     const session = await api.post<WorkoutSession>('/api/sessions/start', { templateId });
-    setActiveSession(session);
+    draft.restore(session);
     setView('session');
   }
 
   async function completeSession(applyToTemplate: boolean) {
-    if (!activeSession) return;
+    const activeSession = draft.read();
+    if (!activeSession || completingSession.current === activeSession.id) return;
     const validationError = getSessionCompletionValidationError(activeSession);
     if (validationError) return setMessage(validationError);
+    completingSession.current = activeSession.id;
     try {
-      await completeWorkoutRequest({
+      const completed = await completeWorkoutRequest({
         session: activeSession,
         applyToTemplate,
         post: (path, body) => api.post<WorkoutSession>(path, body)
       });
+      recordCompletion(store, completed);
+      if (completed.updatedTemplate) recordTemplate(store, completed.updatedTemplate.id, completed.updatedTemplate);
+      else if (applyToTemplate) store.invalidate('/api/templates');
     } catch (error) {
       return setMessage(getUserFacingApiError(error, 'Не удалось завершить тренировку. Попробуйте ещё раз.'));
+    } finally {
+      if (completingSession.current === activeSession.id) completingSession.current = null;
     }
-    setActiveSession(null);
+    if (draft.read()?.id !== activeSession.id) return;
+    draft.restore(null);
     setView('history');
-    let templateRefreshFailed = false;
-    if (applyToTemplate) {
-      try {
-        await refreshTemplates();
-      } catch {
-        templateRefreshFailed = true;
-      }
-    }
-    setMessage(
-      templateRefreshFailed
-        ? 'Тренировка завершена, но список планов не обновился'
-        : applyToTemplate
-          ? 'Тренировка завершена, шаблон обновлён'
-          : 'Тренировка завершена'
-    );
-    await refreshHistory();
-  }
-
-  async function loadProgress(exerciseId: string) {
-    setSelectedProgressExerciseId(exerciseId);
-    setProgress(exerciseId ? await api.get<ProgressPoint[]>(`/api/progress/exercises/${exerciseId}`) : []);
+    setMessage(applyToTemplate ? 'Тренировка завершена, шаблон обновлён' : 'Тренировка завершена');
   }
 
   async function _exportBackup() {
@@ -666,17 +381,32 @@ export function App() {
   async function _importBackup(file: File) {
     const payload = JSON.parse(await file.text());
     await api.post('/api/import', payload);
-    await Promise.all([refreshTemplates(), refreshHistory()]);
-    setMessage('Backup импортирован');
+    draft.restore(null);
+    setSelectedProgressExerciseId('');
+    resetHistoryPages();
+    store.invalidate('/api/templates');
+    store.invalidate('/api/history/calendar');
+    store.invalidate('/api/progress/');
+    setMessage('Данные импортированы');
+    setLoading(true);
+    try {
+      draft.restore(await readActiveSession());
+    } catch {
+      setLoadError(initialLoadError);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  async function deleteHistorySession(sessionId: string) {
+  async function deleteHistorySession(card: HistoryCard) {
     if (!window.confirm('Удалить тренировку из истории?')) return;
-    await api.delete(`/api/sessions/${sessionId}`);
-    await refreshHistory();
-    if (selectedProgressExerciseId) {
-      await loadProgress(selectedProgressExerciseId);
+    try {
+      await api.delete(`/api/sessions/${card.id}`);
+    } catch (error) {
+      setMessage(getUserFacingApiError(error, 'Не удалось удалить тренировку.'));
+      return;
     }
+    recordDeletion(store, card);
     setMessage('Тренировка удалена');
   }
 
@@ -686,16 +416,6 @@ export function App() {
   );
   const bottomControlsHidden = getBottomControlsHidden({ isKeyboardOpen: keyboardOpen, isEditableFocused: editableFocused });
   const startupState = getAppStartupState({ loading, user, loadError });
-
-  if (telegramAuthExpired) {
-    return (
-      <main className="app-shell centered">
-        <section className="panel empty" role="alert">
-          <p>{telegramAuthExpiredError}</p>
-        </section>
-      </main>
-    );
-  }
 
   function renderLoadError() {
     return (
@@ -782,1073 +502,51 @@ export function App() {
         </nav>
       ) : null}
 
-      {getPlansCalendarVisible(view) && <WeekCalendar history={history} />}
+      {getPlansCalendarVisible(view) && <WeekCalendar />}
 
-      {view === 'templates' && (
-        <TemplatePanel
-          exercises={exercises}
-          templates={templates}
-          draft={templateDraft}
-          editingTemplateId={editingTemplateId}
-          setDraft={setTemplateDraft}
-          onEdit={(template) => {
-            setEditingTemplateId(template.id);
-            setTemplateDraft({
-              name: template.name,
-              notes: template.notes,
-              exercises: template.exercises.map((exercise) => ({
-                exerciseId: exercise.exerciseId,
-                exercise: exercise.exercise,
-                order: exercise.order,
-                sets: exercise.sets
-              }))
-            });
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-          onDelete={async (id) => {
-            await api.delete(`/api/templates/${id}`);
-            await refreshTemplates();
-          }}
-          onSave={saveTemplate}
-          onStart={startSession}
-          onCancelEdit={() => {
-            setEditingTemplateId(null);
-            setTemplateDraft(emptyTemplate());
-          }}
-        />
-      )}
-
-      {view === 'session' && (
-        <SessionPanel
-          session={activeSession}
-          exercises={exercises}
-          templates={templates}
-          setSession={setActiveSession}
-          onComplete={completeSession}
-          onStart={startSession}
-          onOpenTemplates={() => setView('templates')}
-        />
-      )}
+      <PlansScreen visible={view === 'templates'} store={store} setMessage={setMessage}
+        changedExercise={changedExercise} onStart={startSession} />
+      {view === 'session' && <GymScreen draft={draft} onStart={startSession}
+        onComplete={completeSession} onOpenTemplates={() => setView('templates')} />}
 
       {view === 'history' && (
         <HistoryPanel
-          history={history}
-          progress={progress}
+          cursors={pageCursors}
+          onNext={cursor => setPageCursors(current => current.includes(cursor) ? current : [...current, cursor])}
           selectedExerciseId={selectedProgressExerciseId}
-          onSelectExercise={loadProgress}
+          onSelectExercise={setSelectedProgressExerciseId}
           onDeleteSession={deleteHistorySession}
         />
       )}
 
       {view === 'cycle' && user.gender === 'female' && <CyclePanel />}
 
-      {view === 'admin' && isAdmin && (
+      {view === 'admin' && isAdmin && <ReadStatus resource={adminCatalog} label="каталог упражнений" />}
+      {view === 'admin' && isAdmin && adminCatalog.data && (
         <AdminPanel
-          exercises={adminExercises}
-          reload={async () => {
-            setAdminExercises(await api.get<Exercise[]>('/api/admin/exercises'));
-            setExercises(await api.get<Exercise[]>('/api/exercises'));
+          exercises={adminCatalog.data}
+          reload={(changed, previous) => {
+            store.invalidate('/api/admin/exercises');
+            store.invalidate('/api/exercises');
+            if (previous) {
+              store.invalidate('/api/templates/');
+              draft.updateExercise(changed);
+              setChangedExercise(changed);
+              if (changed.name !== previous.name) {
+                for (const path of store.paths('/api/history/page')) {
+                  store.update<HistoryPage>(path, page => !page.items.some(card => card.exerciseIds.includes(changed.id)) ? page : ({
+                    ...page, items: page.items.map(card => ({
+                      ...card, exerciseNames: card.exerciseNames.map((name, index) =>
+                        card.exerciseIds[index] === changed.id ? changed.name : name)
+                    }))
+                  }));
+                }
+                store.retry('/api/progress/exercises');
+              }
+            }
           }}
         />
       )}
     </main>
-  );
-}
-
-function TemplatePanel(props: {
-  exercises: Exercise[];
-  templates: WorkoutTemplate[];
-  draft: Partial<WorkoutTemplate> & { exercises: TemplateExercise[] };
-  editingTemplateId: string | null;
-  setDraft: (draft: Partial<WorkoutTemplate> & { exercises: TemplateExercise[] }) => void;
-  onEdit: (template: WorkoutTemplate) => void;
-  onDelete: (id: string) => void;
-  onSave: () => Promise<boolean>;
-  onStart: (id: string) => void;
-  onCancelEdit: () => void;
-}) {
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [dialogStep, setDialogStep] = useState<'form' | 'exercise-list' | 'exercise-detail'>('form');
-  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
-  const [exerciseDraft, setExerciseDraft] = useState<TemplateExercise | null>(null);
-  const [editingExerciseIndex, setEditingExerciseIndex] = useState<number | null>(null);
-  const [dialogError, setDialogError] = useState<string | null>(null);
-  const [draggingExerciseIndex, setDraggingExerciseIndex] = useState<number | null>(null);
-  const draftRef = useRef(props.draft);
-  const summaryRef = useRef<HTMLDivElement | null>(null);
-  const dragStateRef = useRef<{
-    currentIndex: number;
-    lastPointerY: number;
-    pointerId: number;
-    cleanup: () => void;
-  } | null>(null);
-  const dragScrollFrameRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    draftRef.current = props.draft;
-  }, [props.draft]);
-
-  useEffect(() => {
-    return () => {
-      dragStateRef.current?.cleanup();
-      if (dragScrollFrameRef.current !== null) {
-        window.cancelAnimationFrame(dragScrollFrameRef.current);
-      }
-      setTelegramVerticalSwipesEnabled(true);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (props.editingTemplateId) {
-      setIsDialogOpen(true);
-      setDialogStep('form');
-    }
-  }, [props.editingTemplateId]);
-
-  useEffect(() => {
-    if (!isDialogOpen) return;
-    const previousOverflow = document.body.style.overflow;
-    const previousTouchAction = document.body.style.touchAction;
-    document.body.style.overflow = 'hidden';
-    document.body.style.touchAction = 'none';
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.body.style.touchAction = previousTouchAction;
-    };
-  }, [isDialogOpen]);
-
-  function openNewTemplate() {
-    props.onCancelEdit();
-    setSelectedExercise(null);
-    setExerciseDraft(null);
-    setEditingExerciseIndex(null);
-    setDialogError(null);
-    setDialogStep('form');
-    setIsDialogOpen(true);
-  }
-
-  function closeDialog() {
-    setIsDialogOpen(false);
-    setDialogStep('form');
-    setSelectedExercise(null);
-    setExerciseDraft(null);
-    setEditingExerciseIndex(null);
-    setDialogError(null);
-    props.onCancelEdit();
-  }
-
-  const dialogRef = useModalFocus<HTMLElement>(isDialogOpen, closeDialog, dialogStep);
-
-  function openExerciseDetail(exercise: Exercise) {
-    setDialogError(null);
-    setSelectedExercise(exercise);
-    setExerciseDraft({
-      exerciseId: exercise.id,
-      order: props.draft.exercises.length,
-      sets: [{ type: 'working', targetWeightKg: 0, targetReps: 8, order: 0 }]
-    });
-    setEditingExerciseIndex(null);
-    setDialogStep('exercise-detail');
-  }
-
-  function editExerciseDetail(exerciseIndex: number) {
-    setDialogError(null);
-    const exercise = props.draft.exercises[exerciseIndex];
-    const catalogExercise = props.exercises.find((item) => item.id === exercise.exerciseId);
-    setSelectedExercise(catalogExercise ?? exercise.exercise ?? null);
-    setExerciseDraft({
-      ...exercise,
-      sets: exercise.sets.map((set, order) => ({ ...set, order }))
-    });
-    setEditingExerciseIndex(exerciseIndex);
-    setDialogStep('exercise-detail');
-  }
-
-  function updateExerciseSet(setIndex: number, patch: Partial<TemplateSet>) {
-    if (!exerciseDraft) return;
-    setDialogError(null);
-    setExerciseDraft({
-      ...exerciseDraft,
-      sets: exerciseDraft.sets.map((set, currentIndex) =>
-        currentIndex === setIndex ? { ...set, ...patch } : set
-      )
-    });
-  }
-
-  function saveExerciseToPlan() {
-    if (!exerciseDraft) return;
-    const validationError = getTemplateExerciseValidationError(exerciseDraft);
-    if (validationError) {
-      setDialogError(validationError);
-      return;
-    }
-    props.setDraft({
-      ...props.draft,
-      exercises: getSavedTemplateExercises(props.draft.exercises, exerciseDraft, editingExerciseIndex)
-    });
-    setSelectedExercise(null);
-    setExerciseDraft(null);
-    setEditingExerciseIndex(null);
-    setDialogError(null);
-    setDialogStep('form');
-  }
-
-  function removeExerciseFromPlan(index: number) {
-    props.setDraft({
-      ...props.draft,
-      exercises: props.draft.exercises
-        .filter((_, currentIndex) => currentIndex !== index)
-        .map((exercise, order) => ({ ...exercise, order }))
-    });
-  }
-
-  function moveTemplateExercise(fromIndex: number, toIndex: number) {
-    const boundedToIndex = Math.max(0, Math.min(toIndex, props.draft.exercises.length - 1));
-    if (fromIndex === boundedToIndex) return;
-    props.setDraft({
-      ...props.draft,
-      exercises: reorderTemplateExercises(props.draft.exercises, fromIndex, boundedToIndex)
-    });
-  }
-
-  function finishExerciseDrag() {
-    dragStateRef.current?.cleanup();
-    dragStateRef.current = null;
-    if (dragScrollFrameRef.current !== null) {
-      window.cancelAnimationFrame(dragScrollFrameRef.current);
-      dragScrollFrameRef.current = null;
-    }
-    setTelegramVerticalSwipesEnabled(true);
-    setDraggingExerciseIndex(null);
-  }
-
-  function updateDraggedExercisePosition(pointerY: number) {
-    const dragState = dragStateRef.current;
-    if (!dragState) return;
-
-    const targetIndex = getDragTargetIndex(pointerY);
-    if (targetIndex === -1 || targetIndex === dragState.currentIndex) return;
-
-    const reorderedExercises = reorderTemplateExercises(draftRef.current.exercises, dragState.currentIndex, targetIndex);
-    const nextDraft = { ...draftRef.current, exercises: reorderedExercises };
-    draftRef.current = nextDraft;
-    dragState.currentIndex = targetIndex;
-    setDraggingExerciseIndex(targetIndex);
-    props.setDraft(nextDraft);
-  }
-
-  function runDragAutoScroll() {
-    const dragState = dragStateRef.current;
-    const summary = summaryRef.current;
-    if (!dragState || !summary) {
-      dragScrollFrameRef.current = null;
-      return;
-    }
-
-    const rect = summary.getBoundingClientRect();
-    const scrollDelta = getDragAutoScrollDelta({
-      pointerY: dragState.lastPointerY,
-      containerTop: rect.top,
-      containerBottom: rect.bottom
-    });
-
-    if (scrollDelta !== 0) {
-      summary.scrollTop += scrollDelta;
-      updateDraggedExercisePosition(dragState.lastPointerY);
-    }
-
-    dragScrollFrameRef.current = window.requestAnimationFrame(runDragAutoScroll);
-  }
-
-  function getDragTargetIndex(pointerY: number) {
-    const cards = Array.from(summaryRef.current?.querySelectorAll<HTMLElement>('[data-exercise-index]') ?? []);
-    if (cards.length === 0) return -1;
-
-    const targetIndex = cards.findIndex((card) => {
-      const rect = card.getBoundingClientRect();
-      return pointerY < rect.top + rect.height / 2;
-    });
-
-    return targetIndex === -1 ? cards.length - 1 : targetIndex;
-  }
-
-  function startExerciseDrag(index: number, event: ReactPointerEvent<HTMLButtonElement>) {
-    if (props.draft.exercises.length < 2 || (event.pointerType === 'mouse' && event.button !== 0)) return;
-    event.preventDefault();
-
-    const handlePointerMove = (pointerEvent: PointerEvent) => {
-      const dragState = dragStateRef.current;
-      if (!dragState || pointerEvent.pointerId !== dragState.pointerId) return;
-      pointerEvent.preventDefault();
-      dragState.lastPointerY = pointerEvent.clientY;
-      updateDraggedExercisePosition(pointerEvent.clientY);
-    };
-
-    const handlePointerUp = (pointerEvent: PointerEvent) => {
-      if (pointerEvent.pointerId !== dragStateRef.current?.pointerId) return;
-      finishExerciseDrag();
-    };
-
-    const cleanup = () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
-      window.removeEventListener('pointercancel', handlePointerUp);
-    };
-
-    dragStateRef.current?.cleanup();
-    setTelegramVerticalSwipesEnabled(false);
-    dragStateRef.current = { currentIndex: index, lastPointerY: event.clientY, pointerId: event.pointerId, cleanup };
-    setDraggingExerciseIndex(index);
-    window.addEventListener('pointermove', handlePointerMove, { passive: false });
-    window.addEventListener('pointerup', handlePointerUp);
-    window.addEventListener('pointercancel', handlePointerUp);
-    dragScrollFrameRef.current = window.requestAnimationFrame(runDragAutoScroll);
-  }
-
-  function handleExerciseDragKeyDown(index: number, event: ReactKeyboardEvent<HTMLButtonElement>) {
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      moveTemplateExercise(index, index - 1);
-    }
-
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      moveTemplateExercise(index, index + 1);
-    }
-  }
-
-  function goBackFromDialogStep() {
-    setDialogError(null);
-    if (dialogStep === 'exercise-detail') {
-      setDialogStep(editingExerciseIndex === null ? 'exercise-list' : 'form');
-      setSelectedExercise(null);
-      setExerciseDraft(null);
-      setEditingExerciseIndex(null);
-      return;
-    }
-
-    setDialogStep('form');
-  }
-
-  async function savePlan() {
-    if (!(await props.onSave())) return;
-    setIsDialogOpen(false);
-    setDialogStep('form');
-    setSelectedExercise(null);
-    setExerciseDraft(null);
-    setEditingExerciseIndex(null);
-  }
-
-  const dialogTitle =
-    dialogStep === 'exercise-list'
-      ? 'Выберите упражнение'
-      : dialogStep === 'exercise-detail'
-        ? selectedExercise?.name ?? 'Упражнение'
-        : props.editingTemplateId
-          ? 'Редактировать план'
-          : 'Новый план';
-
-  return (
-    <section className="stack">
-      <button className="create-plan-button" onClick={openNewTemplate}>
-        <Plus size={20} /> Новый план
-      </button>
-
-      <section className="stack">
-        <h2>Мои планы</h2>
-        {props.templates.length === 0 && <p className="empty">Планов пока нет. Создайте первый из каталога упражнений.</p>}
-        {props.templates.map((template) => (
-          <article className="card" key={template.id}>
-            <div className="card-header">
-              <div>
-                <h3>{template.name}</h3>
-                <span className="muted">{getExerciseCountLabel(template.exercises.length)}</span>
-              </div>
-              <button onClick={() => props.onStart(template.id)}>
-                <Play size={18} /> Старт
-              </button>
-            </div>
-            <div className="compact-list">
-              {template.exercises.map((item) => (
-                <span key={item.id}>{item.exercise?.name ?? 'Упражнение'}</span>
-              ))}
-            </div>
-            <div className="actions">
-              <button className="secondary" onClick={() => props.onEdit(template)}>
-                Редактировать
-              </button>
-              <button className="danger" onClick={() => props.onDelete(template.id)}>
-                <Trash2 size={16} /> Удалить
-              </button>
-            </div>
-          </article>
-        ))}
-      </section>
-
-      {isDialogOpen && (
-        <div className="modal-backdrop" role="presentation">
-          <section
-            className="plan-dialog"
-            ref={dialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="plan-dialog-title"
-          >
-            <div className="dialog-header">
-              {dialogStep === 'form' ? (
-                <span className="dialog-spacer" aria-hidden="true" />
-              ) : (
-                <button className="icon-button" aria-label="Назад" onClick={goBackFromDialogStep}>
-                  <ArrowLeft size={18} />
-                </button>
-              )}
-              <h2 id="plan-dialog-title">{dialogTitle}</h2>
-              <button className="icon-button" aria-label="Закрыть" onClick={closeDialog}>
-                <X size={18} />
-              </button>
-            </div>
-
-            {dialogStep === 'form' && (
-              <div className="dialog-body plan-form-body">
-                <div className="plan-form-fields">
-                  <input
-                    placeholder="Название тренировки"
-                    value={props.draft.name ?? ''}
-                    onChange={(event) => props.setDraft({ ...props.draft, name: event.target.value })}
-                  />
-                  <textarea
-                    placeholder="Заметки"
-                    value={props.draft.notes ?? ''}
-                    onChange={(event) => props.setDraft({ ...props.draft, notes: event.target.value })}
-                  />
-                </div>
-
-                <div className={draggingExerciseIndex === null ? 'plan-exercise-summary' : 'plan-exercise-summary is-dragging'} ref={summaryRef}>
-                  {props.draft.exercises.length === 0 ? (
-                    <p className="empty">Добавьте упражнения из каталога.</p>
-                  ) : (
-                    props.draft.exercises.map((exercise, exerciseIndex) => {
-                      const catalogExercise = props.exercises.find((item) => item.id === exercise.exerciseId);
-                      return (
-                        <article
-                          className={draggingExerciseIndex === exerciseIndex ? 'exercise-summary-card dragging' : 'exercise-summary-card'}
-                          data-exercise-index={exerciseIndex}
-                          key={`${exercise.exerciseId}-${exerciseIndex}`}
-                        >
-                          <button
-                            className="exercise-drag-handle"
-                            aria-label="Перетащить упражнение"
-                            onKeyDown={(event) => handleExerciseDragKeyDown(exerciseIndex, event)}
-                            onPointerDown={(event) => startExerciseDrag(exerciseIndex, event)}
-                            type="button"
-                          >
-                            <GripVertical size={18} />
-                          </button>
-                          <div className="exercise-summary-content">
-                            <h3>{catalogExercise?.name ?? exercise.exercise?.name ?? 'Упражнение'}</h3>
-                            <span className="muted">{exercise.sets.length} подходов</span>
-                          </div>
-                          <div className="exercise-summary-actions">
-                            <button className="icon-button" aria-label="Редактировать упражнение" onClick={() => editExerciseDetail(exerciseIndex)}>
-                              <Pencil size={17} />
-                            </button>
-                            <button className="icon-button" aria-label="Удалить упражнение" onClick={() => removeExerciseFromPlan(exerciseIndex)}>
-                              <Trash2 size={17} />
-                            </button>
-                          </div>
-                        </article>
-                      );
-                    })
-                  )}
-                </div>
-
-                <div className="actions dialog-actions">
-                  <button className="secondary" disabled={props.exercises.length === 0} onClick={() => setDialogStep('exercise-list')}>
-                    <ListPlus size={18} /> Упражнение
-                  </button>
-                  <button onClick={savePlan}>
-                    <Save size={18} /> Сохранить
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {dialogStep === 'exercise-list' && (
-              <div className="exercise-picker-list">
-                {props.exercises.map((exercise) => (
-                  <button className="exercise-picker-row" key={exercise.id} onClick={() => openExerciseDetail(exercise)}>
-                    <span>
-                      <strong>{exercise.name}</strong>
-                      <small>
-                        {exercise.muscleGroup} · {exercise.equipment}
-                      </small>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {dialogStep === 'exercise-detail' && exerciseDraft && (
-              <div className="dialog-body exercise-detail-body">
-                {selectedExercise?.techniqueNote && <p className="muted">{selectedExercise.techniqueNote}</p>}
-
-                <div className="exercise-block exercise-sets-panel">
-                  <div className="exercise-sets-list">
-                    {exerciseDraft.sets.map((set, setIndex) => (
-                      <div className="set-row" key={setIndex}>
-                        <select value={set.type} onChange={(event) => updateExerciseSet(setIndex, { type: event.target.value as TemplateSet['type'] })}>
-                          <option value="warmup">Разм.</option>
-                          <option value="working">Раб.</option>
-                        </select>
-                        <label className="unit-field">
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            step="0.5"
-                            min="0"
-                            placeholder="0 кг"
-                            value={numberInputValue(set.targetWeightKg)}
-                            onChange={(event) => updateExerciseSet(setIndex, { targetWeightKg: parseRequiredNumberInput(event.target.value) })}
-                          />
-                          <span>кг</span>
-                        </label>
-                        <label className="unit-field">
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            step="1"
-                            min="1"
-                            placeholder="0 п."
-                            value={numberInputValue(set.targetReps)}
-                            aria-invalid={set.targetReps === null || !Number.isInteger(set.targetReps) || set.targetReps <= 0}
-                            onChange={(event) => updateExerciseSet(setIndex, { targetReps: parseOptionalNumberInput(event.target.value) })}
-                          />
-                          <span>п.</span>
-                        </label>
-                        <button
-                          className="icon-button"
-                          aria-label="Удалить подход"
-                          onClick={() =>
-                            setExerciseDraft({
-                              ...exerciseDraft,
-                              sets: exerciseDraft.sets.filter((_, index) => index !== setIndex).map((item, order) => ({ ...item, order }))
-                            })
-                          }
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  {dialogError ? (
-                    <p className="form-error" role="alert">
-                      {dialogError}
-                    </p>
-                  ) : null}
-                  <button
-                    className="secondary"
-                    onClick={() =>
-                      setExerciseDraft({
-                        ...exerciseDraft,
-                        sets: [...exerciseDraft.sets, getNextTemplateSet(exerciseDraft.sets)]
-                      })
-                    }
-                  >
-                    <Plus size={16} /> Подход
-                  </button>
-                </div>
-
-                <div className="exercise-detail-actions">
-                  <button disabled={exerciseDraft.sets.length === 0} onClick={saveExerciseToPlan}>
-                    <Save size={18} /> {editingExerciseIndex === null ? 'Сохранить упражнение' : 'Готово'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </section>
-        </div>
-      )}
-    </section>
-  );
-}
-
-export function SessionPanel(props: {
-  session: WorkoutSession | null;
-  exercises: Exercise[];
-  templates: WorkoutTemplate[];
-  setSession: (session: WorkoutSession | null) => void;
-  onComplete: (applyToTemplate: boolean) => void;
-  onStart: (templateId: string) => void;
-  onOpenTemplates: () => void;
-  initialPlanPickerOpen?: boolean;
-}) {
-  const [isPlanPickerOpen, setIsPlanPickerOpen] = useState(props.initialPlanPickerOpen ?? false);
-  const [expandedExercises, setExpandedExercises] = useState(() =>
-    getInitialExerciseDisclosureState(props.session?.exercises.length ?? 0)
-  );
-  const sessionExerciseCount = props.session?.exercises.length ?? 0;
-  const closePlanPicker = () => setIsPlanPickerOpen(false);
-  const planPickerDialogRef = useModalFocus<HTMLElement>(isPlanPickerOpen, closePlanPicker);
-
-  useEffect(() => {
-    setExpandedExercises(getInitialExerciseDisclosureState(sessionExerciseCount));
-  }, [props.session?.id, sessionExerciseCount]);
-
-  if (!props.session) {
-    return (
-      <section className="stack">
-        <section className="panel session-start-panel">
-          <div>
-            <h2>Готовы к тренировке?</h2>
-            <p className="muted">Выберите план и начните занятие прямо из зала.</p>
-          </div>
-          <button disabled={props.templates.length === 0} onClick={() => setIsPlanPickerOpen(true)}>
-            <Play size={18} /> Начать тренировку
-          </button>
-          {props.templates.length === 0 && (
-            <div className="session-start-empty">
-              <span>Планов пока нет.</span>
-              <button className="secondary" onClick={props.onOpenTemplates}>
-                <Plus size={18} /> Создать план
-              </button>
-            </div>
-          )}
-        </section>
-
-        {isPlanPickerOpen && (
-          <div className="modal-backdrop" role="presentation">
-            <section
-              className="plan-dialog session-plan-dialog"
-              ref={planPickerDialogRef}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="session-plan-dialog-title"
-            >
-              <div className="dialog-header">
-                <span className="dialog-spacer" aria-hidden="true" />
-                <h2 id="session-plan-dialog-title">Выберите план</h2>
-                <button className="icon-button" aria-label="Закрыть" onClick={closePlanPicker}>
-                  <X size={18} />
-                </button>
-              </div>
-              <div className="dialog-body session-plan-list">
-                {props.templates.map((template) => (
-                  <article className="card session-plan-card" key={template.id}>
-                    <div className="card-header">
-                      <div>
-                        <h3>{template.name}</h3>
-                        <span className="muted">{getExerciseCountLabel(template.exercises.length)}</span>
-                      </div>
-                      <button
-                        onClick={() => {
-                          closePlanPicker();
-                          props.onStart(template.id);
-                        }}
-                      >
-                        <Play size={18} /> Старт
-                      </button>
-                    </div>
-                    <div className="compact-list">
-                      {template.exercises.map((item) => (
-                        <span key={item.id ?? `${item.exerciseId}-${item.order}`}>
-                          {item.exercise?.name ?? props.exercises.find((exercise) => exercise.id === item.exerciseId)?.name ?? 'Упражнение'}
-                        </span>
-                      ))}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          </div>
-        )}
-      </section>
-    );
-  }
-
-  function updateExercise(index: number, patch: Partial<SessionExercise>) {
-    props.setSession({
-      ...props.session!,
-      exercises: props.session!.exercises.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item))
-    });
-  }
-
-  function updateSet(exerciseIndex: number, setIndex: number, patch: Partial<SessionSet>) {
-    const exercise = props.session!.exercises[exerciseIndex];
-    updateExercise(exerciseIndex, {
-      sets: exercise.sets.map((set, currentIndex) => (currentIndex === setIndex ? { ...set, ...patch } : set))
-    });
-  }
-
-  return (
-    <section className="stack">
-      <div className="panel-title">
-        <h2>Текущая тренировка</h2>
-      </div>
-
-      {props.session.exercises.map((exercise, exerciseIndex) => {
-        const isExpanded = expandedExercises[exerciseIndex] ?? false;
-
-        return (
-          <article className="card session-exercise-card" key={`${exercise.exerciseId}-${exerciseIndex}`}>
-            <button
-              className="session-exercise-header"
-              aria-expanded={isExpanded}
-              onClick={() =>
-                setExpandedExercises((state) => toggleExerciseDisclosureState(state, exerciseIndex))
-              }
-            >
-              <span className="session-exercise-title">{getSessionExerciseTitle(exercise, props.exercises)}</span>
-              {isSessionExerciseComplete(exercise) && (
-                <span className="exercise-complete-indicator" aria-label="Все подходы выполнены">
-                  <CircleCheck size={17} />
-                </span>
-              )}
-              <ChevronDown className="session-exercise-chevron" size={20} aria-hidden="true" />
-            </button>
-
-            {isExpanded && (
-              <div className="session-exercise-content">
-                <div className="row">
-                  <select value={exercise.exerciseId} onChange={(event) => updateExercise(exerciseIndex, { exerciseId: event.target.value })}>
-                    {props.exercises.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    className="icon-button"
-                    aria-label="Удалить упражнение"
-                    onClick={() => {
-                      setExpandedExercises((state) => removeExerciseDisclosureState(state, exerciseIndex));
-                      props.setSession({
-                        ...props.session!,
-                        exercises: normalizeSessionExercises(
-                          props.session!.exercises.filter((_, index) => index !== exerciseIndex)
-                        )
-                      });
-                    }}
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                </div>
-
-                {exercise.sets.map((set, setIndex) => (
-                  <div className="set-row session-set" key={setIndex}>
-                    <select value={set.type} onChange={(event) => updateSet(exerciseIndex, setIndex, { type: event.target.value as SessionSet['type'] })}>
-                      <option value="warmup">Разм.</option>
-                      <option value="working">Раб.</option>
-                    </select>
-                    <label className="unit-field">
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        step="0.5"
-                        min="0"
-                        placeholder="0 кг"
-                        value={numberInputValue(set.actualWeightKg)}
-                        onChange={(event) =>
-                          updateSet(exerciseIndex, setIndex, { actualWeightKg: parseOptionalNumberInput(event.target.value) })
-                        }
-                      />
-                      <span>кг</span>
-                    </label>
-                    <label className="unit-field">
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        step="1"
-                        min="1"
-                        placeholder="0 п."
-                        value={numberInputValue(set.actualReps)}
-                        onChange={(event) =>
-                          updateSet(exerciseIndex, setIndex, { actualReps: parseOptionalNumberInput(event.target.value) })
-                        }
-                      />
-                      <span>п.</span>
-                    </label>
-                    <button
-                      className={set.completed ? 'icon-button done' : 'icon-button'}
-                      aria-label="Отметить подход"
-                      onClick={() => updateSet(exerciseIndex, setIndex, { completed: !set.completed })}
-                    >
-                      <Check size={18} />
-                    </button>
-                  </div>
-                ))}
-
-                <button
-                  className="secondary"
-                  onClick={() =>
-                    updateExercise(exerciseIndex, {
-                      sets: [
-                        ...exercise.sets,
-                        {
-                          type: 'working',
-                          plannedWeightKg: null,
-                          plannedReps: null,
-                          actualWeightKg: 0,
-                          actualReps: 8,
-                          completed: false,
-                          order: exercise.sets.length
-                        }
-                      ]
-                    })
-                  }
-                >
-                  <Plus size={16} /> Подход
-                </button>
-              </div>
-            )}
-          </article>
-        );
-      })}
-
-      <button
-        className="secondary"
-        disabled={props.exercises.length === 0}
-        onClick={() => {
-          setExpandedExercises((state) => appendExpandedExerciseDisclosureState(state));
-          props.setSession({
-            ...props.session!,
-            exercises: [
-              ...props.session!.exercises,
-              {
-                exerciseId: props.exercises[0].id,
-                order: props.session!.exercises.length,
-                sets: [
-                  {
-                    type: 'working',
-                    plannedWeightKg: null,
-                    plannedReps: null,
-                    actualWeightKg: 0,
-                    actualReps: 8,
-                    completed: false,
-                    order: 0
-                  }
-                ]
-              }
-            ]
-          });
-        }}
-      >
-        <ListPlus size={18} /> Добавить упражнение
-      </button>
-
-      <div className="finish-panel">
-        <button onClick={() => props.onComplete(false)}>
-          <Check size={18} /> Завершить
-        </button>
-        <button className="secondary" onClick={() => props.onComplete(true)}>
-          Завершить и обновить план
-        </button>
-      </div>
-    </section>
-  );
-}
-
-export function HistoryPanel(props: {
-  history: WorkoutSession[];
-  progress: ProgressPoint[];
-  selectedExerciseId: string;
-  onSelectExercise: (id: string) => void;
-  onDeleteSession: (id: string) => void;
-}) {
-  const progressExercises = useMemo(() => getProgressExercises(props.history), [props.history]);
-
-  return (
-    <section className="stack">
-      <MonthCalendar history={props.history} />
-
-      <section className="panel">
-        <h2>Прогресс</h2>
-        <select value={props.selectedExerciseId} onChange={(event) => props.onSelectExercise(event.target.value)}>
-          <option value="">Выберите упражнение</option>
-          {progressExercises.map((exercise) => (
-            <option key={exercise.id} value={exercise.id}>
-              {exercise.name}
-            </option>
-          ))}
-        </select>
-        <div className="progress-list">
-          {props.progress.map((point) => (
-            <div className="progress-row" key={point.sessionId}>
-              <span>{new Date(point.date).toLocaleDateString('ru-RU')}</span>
-              <strong>
-                {point.bestWeightKg} кг x {point.bestReps}
-              </strong>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="stack">
-        <h2>История</h2>
-        {props.history.length === 0 && <p className="empty">Завершённых тренировок пока нет.</p>}
-        {props.history.map((session) => (
-          <article className="card" key={session.id}>
-            <div className="card-header history-card-header">
-              <h3>{session.completedAt ? new Date(session.completedAt).toLocaleDateString('ru-RU') : 'Тренировка'}</h3>
-              <div className="history-card-actions">
-                <span className="history-plan-name">{getHistorySessionPlanTitle(session)}</span>
-                <button className="icon-button" aria-label="Удалить тренировку" onClick={() => props.onDeleteSession(session.id)}>
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </div>
-            <div className="compact-list">
-              {session.exercises.map((exercise) => (
-                <span key={exercise.id}>{exercise.exercise?.name ?? 'Упражнение'}</span>
-              ))}
-            </div>
-          </article>
-        ))}
-      </section>
-    </section>
-  );
-}
-
-function AdminPanel(props: { exercises: Exercise[]; reload: () => Promise<void> }) {
-  type ExerciseDraft = {
-    name: string;
-    muscleGroup: MuscleGroup | '';
-    equipment: string;
-    techniqueNote: string;
-    isHidden: boolean;
-  };
-
-  const emptyDraft: ExerciseDraft = {
-    name: '',
-    muscleGroup: '',
-    equipment: '',
-    techniqueNote: '',
-    isHidden: false
-  };
-
-  const [draft, setDraft] = useState<ExerciseDraft>(emptyDraft);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState(draft);
-  const canCreateExercise = draft.name.trim().length > 0 && draft.muscleGroup !== '' && draft.equipment.trim().length > 0;
-  const canSaveExercise = editDraft.name.trim().length > 0 && editDraft.muscleGroup !== '' && editDraft.equipment.trim().length > 0;
-
-  async function saveExercise() {
-    await api.post('/api/admin/exercises', draft);
-    setDraft(emptyDraft);
-    await props.reload();
-  }
-
-  return (
-    <section className="stack">
-      <section className="panel">
-        <h2>Новое упражнение</h2>
-        <input placeholder="Название" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
-        <select
-          aria-label="Группа мышц"
-          value={draft.muscleGroup}
-          onChange={(event) => setDraft({ ...draft, muscleGroup: event.target.value as MuscleGroup | '' })}
-        >
-          <option value="">Группа мышц</option>
-          {MUSCLE_GROUP_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <input
-          placeholder="Оборудование"
-          value={draft.equipment}
-          onChange={(event) => setDraft({ ...draft, equipment: event.target.value })}
-        />
-        <textarea
-          placeholder="Заметка по технике"
-          value={draft.techniqueNote}
-          onChange={(event) => setDraft({ ...draft, techniqueNote: event.target.value })}
-        />
-        <button disabled={!canCreateExercise} onClick={saveExercise}>
-          <Plus size={18} /> Создать
-        </button>
-      </section>
-
-      {props.exercises.map((exercise) => (
-        <article className={exercise.isHidden ? 'card dimmed' : 'card'} key={exercise.id}>
-          {editingId === exercise.id ? (
-            <div className="edit-grid">
-              <input value={editDraft.name} onChange={(event) => setEditDraft({ ...editDraft, name: event.target.value })} />
-              <select
-                aria-label="Группа мышц"
-                value={editDraft.muscleGroup}
-                onChange={(event) => setEditDraft({ ...editDraft, muscleGroup: event.target.value as MuscleGroup | '' })}
-              >
-                <option value="">Группа мышц</option>
-                {MUSCLE_GROUP_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <input
-                value={editDraft.equipment}
-                onChange={(event) => setEditDraft({ ...editDraft, equipment: event.target.value })}
-              />
-              <textarea
-                value={editDraft.techniqueNote}
-                onChange={(event) => setEditDraft({ ...editDraft, techniqueNote: event.target.value })}
-              />
-              <div className="actions">
-                <button
-                  disabled={!canSaveExercise}
-                  onClick={async () => {
-                    await api.patch(`/api/admin/exercises/${exercise.id}`, editDraft);
-                    setEditingId(null);
-                    await props.reload();
-                  }}
-                >
-                  <Save size={18} /> Сохранить
-                </button>
-                <button className="secondary" onClick={() => setEditingId(null)}>
-                  Отмена
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="card-header">
-              <div>
-                <h3>{exercise.name}</h3>
-                <span className="muted">
-                  {getMuscleGroupLabel(exercise.muscleGroup)} · {exercise.equipment}
-                </span>
-              </div>
-              <div className="actions compact-actions">
-                <button
-                  className="secondary"
-                  onClick={() => {
-                    setEditingId(exercise.id);
-                    setEditDraft({
-                      name: exercise.name,
-                      muscleGroup: exercise.muscleGroup ?? '',
-                      equipment: exercise.equipment,
-                      techniqueNote: exercise.techniqueNote ?? '',
-                      isHidden: exercise.isHidden
-                    });
-                  }}
-                >
-                  Редактировать
-                </button>
-                <button
-                  className="secondary"
-                  onClick={async () => {
-                    await api.patch(`/api/admin/exercises/${exercise.id}`, { isHidden: !exercise.isHidden });
-                    await props.reload();
-                  }}
-                >
-                  {exercise.isHidden ? 'Показать' : 'Скрыть'}
-                </button>
-              </div>
-            </div>
-          )}
-        </article>
-      ))}
-    </section>
   );
 }

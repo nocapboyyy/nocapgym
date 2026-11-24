@@ -38,6 +38,7 @@ export type TemplateExercise = {
 };
 
 export type WorkoutTemplate = {
+  updatedAt?: string;
   id: string;
   name: string;
   notes: string | null;
@@ -81,3 +82,17 @@ export type ProgressPoint = {
   bestReps: number;
   sets: Array<{ weightKg: number; reps: number }>;
 };
+
+export type CalendarMarker = Pick<WorkoutSession, 'id' | 'startedAt'>;
+export type HistoryCard = CalendarMarker & {
+  completedAt: string | null;
+  planTitle: string;
+  titleTemplateId?: string;
+  exerciseIds: string[];
+  exerciseNames: string[];
+};
+export type HistoryPage = { items: HistoryCard[]; nextCursor: string | null };
+export type ProgressOption = Pick<Exercise, 'id' | 'name'>;
+
+export type PlanSummary = { updatedAt: string; id: string; name: string; exercises: { id: string; name: string }[] };
+export type PlanList = { items: PlanSummary[] };

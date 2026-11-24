@@ -53,6 +53,24 @@ describe('integration test harness', () => {
     await expect(harness.prisma.user.count()).resolves.toBe(2);
   });
 
+  it('serves ordered summaries with distinct row IDs, including hidden and repeated exercises', async () => {
+    const exercise = await harness.prisma.exercise.create({ data: { name: 'Жим', equipment: '', isHidden: true } });
+    const user = await harness.prisma.user.create({ data: { telegramId: '1001' } });
+    const plan = await harness.prisma.workoutTemplate.create({ data: {
+      userId: user.id, name: 'План', notes: 'Только в редакторе', exercises: {
+        create: [1, 0].map(order => ({ id: 'row-' + order, order, exerciseId: exercise.id,
+          sets: { create: { order: 0, type: 'working', targetReps: 8, targetWeightKg: 50 } } }))
+      }
+    } });
+    const get = (id: string, url: string) => harness.app.inject({ url, headers: harness.authHeaders(id) });
+    expect((await get('1001', '/api/templates/summary')).json()).toEqual({ items: [{
+      id: plan.id, name: plan.name, updatedAt: plan.updatedAt.toISOString(),
+      exercises: [{ id: 'row-0', name: 'Жим' }, { id: 'row-1', name: 'Жим' }]
+    }] });
+    expect((await get('1002', '/api/templates/summary')).json()).toEqual({ items: [] });
+    expect((await get('1001', '/api/templates/' + plan.id)).json().exercises[0].sets).toHaveLength(1);
+  });
+
   it('keeps admin authorization enforced by the backend', async () => {
     const regularUserResponse = await harness.app.inject({
       method: 'GET',

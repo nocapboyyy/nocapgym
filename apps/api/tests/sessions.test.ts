@@ -15,12 +15,12 @@ describe('session routes', () => {
       },
       prisma: {
         user: {
-          upsert: vi.fn().mockResolvedValue({
+          findUnique: vi.fn().mockResolvedValue({
             id: 'user-1',
             telegramId: '1001',
             firstName: 'Dev',
             lastName: null,
-            username: 'dev_user',
+            username: 'dev',
             createdAt: new Date(),
             updatedAt: new Date()
           })

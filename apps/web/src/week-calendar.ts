@@ -1,6 +1,7 @@
+import { calendarRange } from './calendar-range';
 import type { WorkoutSession } from './types';
 
-type HistoryItem = Pick<WorkoutSession, 'id' | 'startedAt' | 'status'>;
+type HistoryItem = Pick<WorkoutSession, 'id' | 'startedAt'> & { status?: WorkoutSession['status'] };
 
 export type WeekCalendarDay = {
   date: Date;
@@ -103,12 +104,11 @@ export function startLiveDayRefresh(
 
 export function buildCurrentWeek(now: Date, history: HistoryItem[]): WeekCalendarDay[] {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const mondayOffset = (today.getDay() + 6) % 7;
-  const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - mondayOffset);
+  const { start: monday } = calendarRange(today, 'week');
   const completedWorkoutDates = new Set<string>();
 
   for (const session of history) {
-    if (session.status !== 'completed') {
+    if (session.status && session.status !== 'completed') {
       continue;
     }
 

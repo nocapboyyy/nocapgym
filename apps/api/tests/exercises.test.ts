@@ -15,7 +15,7 @@ const adminUser = {
   telegramId: '1001',
   firstName: 'Dev',
   lastName: null,
-  username: 'dev_user',
+  username: 'dev',
   gender: null,
   createdAt: new Date('2026-06-22T00:00:00.000Z'),
   updatedAt: new Date('2026-06-22T00:00:00.000Z')
@@ -37,7 +37,7 @@ describe('exercise admin routes', () => {
     const app = await buildServer({
       config,
       prisma: {
-        user: { upsert: vi.fn().mockResolvedValue(adminUser) },
+        user: { findUnique: vi.fn().mockResolvedValue(adminUser) },
         exercise: { create }
       } as any
     });
@@ -72,7 +72,7 @@ describe('exercise admin routes', () => {
     const app = await buildServer({
       config,
       prisma: {
-        user: { upsert: vi.fn().mockResolvedValue(adminUser) },
+        user: { findUnique: vi.fn().mockResolvedValue(adminUser) },
         exercise: { create }
       } as any
     });
@@ -110,7 +110,7 @@ describe('exercise admin routes', () => {
     const app = await buildServer({
       config,
       prisma: {
-        user: { upsert: vi.fn().mockResolvedValue(adminUser) },
+        user: { findUnique: vi.fn().mockResolvedValue(adminUser) },
         exercise: { update }
       } as any
     });

@@ -117,6 +117,7 @@ model WorkoutSession {
   exercises SessionExercise[]
 
   @@index([userId, status, completedAt])
+  @@index([userId, status, startedAt])
   @@index([templateId])
 }
 
