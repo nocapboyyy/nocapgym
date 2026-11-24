@@ -15,25 +15,71 @@ This runbook applies to the current Ubuntu VPS, systemd, and SQLite deployment.
 
 ## Deploy
 
-Prepare and verify the new code while the current API is still running:
+Run the executable deployment script from any directory. It defaults to `main`
+and accepts another branch as its only argument:
+
+```bash
+/opt/nocapgym/scripts/deploy.sh
+/opt/nocapgym/scripts/deploy.sh codex/code-review-remediation
+```
+
+For a stable command that remains available when switching to branches without
+the script, install a copy outside the checkout after first pulling this change:
+
+```bash
+sudo install -m 755 /opt/nocapgym/scripts/deploy.sh /usr/local/bin/nocapgym-deploy
+nocapgym-deploy
+nocapgym-deploy BRANCH_NAME
+```
+
+Reinstall that copy when the deployment script changes. Run it as the normal
+deployment user, not with `sudo`; it requests sudo only for service management.
+`APP_DIR`, `API_SERVICE`, and `HEALTH_URL` override `/opt/nocapgym`,
+`nocapgym-api`, and `http://127.0.0.1:4000/api/health`. Set `HEALTH_URL` if the
+server uses another API port or to check the public HTTPS endpoint.
+
+The script loads nvm from `NVM_DIR` or `~/.nvm` when available and selects
+Node.js 22; otherwise it requires Node.js >=22.12 and <23 on PATH. It requires
+`flock` (Ubuntu's util-linux), `sqlite3`, Git, curl, and systemd. It rejects dirty
+checkouts, concurrent deployments, and local branch commits absent from the
+remote branch. It fetches and pins the requested remote commit before stopping
+the API, then switches branches, installs dependencies, verifies/builds the
+code, backs up/migrates SQLite, starts the service, and checks API health.
+
+The API stays stopped during dependency installation and build because this
+deployment uses one shared checkout. Any failure after the stop leaves the API
+stopped, including a failed health check after startup. No automatic code or
+database rollback is attempted. Previous and target commits are saved in
+`.git/nocapgym-deploy-state`; the verified database backup path is printed by
+the migration wrapper. All target branches must provide the production migration
+command. Switching branches does not reverse database migrations; use Recovery
+when restoring an older database/code pair.
+
+Validate the script locally with `bash -n scripts/deploy.sh` and
+`python3 scripts/test_deploy.py`. The tests use temporary Git repositories and
+mock server tools; they do not update a real service or database.
+
+The equivalent manual sequence is below. Stop at the first error:
 
 ```bash
 cd /opt/nocapgym
 PREVIOUS_COMMIT=$(git rev-parse HEAD)
-git pull --ff-only
+git switch main
+git pull --ff-only origin main
 nvm use
+sudo systemctl stop nocapgym-api
 npm ci
+npm run prisma:generate
 npm run lint
 npm run typecheck
 npm test
 npm run build
 ```
 
-Stop writes, create and verify a SQLite backup, apply migrations, and only then
-start the new API:
+Create and verify a SQLite backup, apply migrations, and only then start the
+new API:
 
 ```bash
-sudo systemctl stop nocapgym-api
 npm run prisma:migrate:deploy
 sudo systemctl start nocapgym-api
 sudo systemctl status nocapgym-api --no-pager

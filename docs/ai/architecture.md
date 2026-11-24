@@ -37,7 +37,7 @@ response while full details remain in server logs.
   `TELEGRAM_INIT_DATA_CLOCK_SKEW_SECONDS`.
 - Expired auth returns `401 TELEGRAM_AUTH_EXPIRED`; the frontend instructs the
   user to close and reopen the Mini App instead of retrying the same init data.
-- If valid, backend upserts `User` by Telegram ID.
+- After validation, the backend reads `User` by Telegram ID. It creates missing accounts and synchronizes changed Telegram name and username fields. Requests with unchanged identity fields only read the profile. Concurrent first requests resolve to the same account.
 - Local development can use `x-dev-telegram-id` when dev auth is enabled.
 - Admin access is controlled by `ADMIN_TELEGRAM_IDS`.
 - Admin authorization remains enforced by backend checks; frontend navigation is not an authority boundary.
@@ -87,6 +87,13 @@ template lookup, exercise progress, and ordered template/session child
 relations. The history index is verified with SQLite query-plan integration
 tests.
 
+The API also exposes compact personal history reads. `GET /api/history/page`
+uses a value cursor over completion date and ID, including undated imported
+sessions. `GET /api/history/calendar` reads completed session markers by
+indexed start-time range. `GET /api/progress/exercises` lists exercises with
+qualifying working sets across the user’s dated completed sessions. The full
+history endpoint remains available.
+
 Exercise progress points include their source `sessionId`, so multiple sessions
 for the same exercise on one calendar day remain distinct and provide stable
 frontend list keys.
@@ -95,7 +102,27 @@ frontend list keys.
 
 ## Frontend
 
-The current UI is concentrated in `apps/web/src/App.tsx` and `apps/web/src/styles.css`.
+The application shell in `apps/web/src/App.tsx` manages the account, navigation,
+Telegram viewport and workout lifecycle. PlansScreen, GymScreen, HistoryPanel
+and AdminPanel own their screen components. The plans controller persists
+across tab switches. The account owns one in-memory SessionDraft, and only
+GymScreen subscribes to its editable values. Restoring the same session ID
+preserves local edits. Completing or replacing the session discards its draft.
+
+Plans and the gym picker use `GET /api/templates/summary`. Each summary carries
+its update time and ordered plan-row IDs and exercise names. The editor reads
+the full template by ID on demand. Starting a plan only requires its ID.
+
+After profile onboarding, startup reads the active session before selecting Gym
+or Plans. The visible screen requests its resources independently. The weekly
+and monthly calendars request their visible local date ranges. History reads
+cursor pages and progress options on entry. The editor and admin catalogs load
+when opened. Screen reads are cached in memory per account and request URL;
+expired authorization unmounts the account UI. Successful workout mutations patch
+cached history pages by session ID and update markers for the affected date ranges.
+Page cursors retain their original boundaries. History cards carry ordered exercise
+IDs and, only when the title comes from a live plan, its ID. Completing a workout
+with template application returns the updated template on the successful transition.
 
 Key screens:
 
@@ -137,24 +164,19 @@ Current VPS style:
 - Caddy handles HTTPS/reverse proxy.
 - SQLite remains the production DB for v1.
 
-Common deploy commands:
+One-command deployment (defaults to `main`, optional branch argument):
 
 ```bash
-cd /opt/nocapgym
-git pull --ff-only
-nvm use
-npm ci
-npm run lint
-npm run build
-sudo systemctl stop nocapgym-api
-npm run prisma:migrate:deploy
-sudo systemctl start nocapgym-api
-sudo systemctl status nocapgym-api --no-pager
+/opt/nocapgym/scripts/deploy.sh
+/opt/nocapgym/scripts/deploy.sh BRANCH_NAME
 ```
 
 SQLite DB location is controlled by `DATABASE_URL`. The production wrapper
 resolves relative paths from `apps/api/prisma`, matching the Prisma schema.
-Production uses Node.js 22. The migration wrapper creates and integrity-checks
+Production uses Node.js 22. The deployment script locks the checkout and stops
+the API before changing code, dependencies, or build outputs. It leaves the API
+stopped on failed verification, migration, or post-start health checks.
+The migration wrapper creates and integrity-checks
 a SQLite backup before `prisma migrate deploy`, checks the migrated database,
 and prevents service restart on failure. The complete deployment and recovery
 procedure is in `docs/ai/production-runbook.md`.
