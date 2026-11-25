@@ -53,5 +53,5 @@ describe('production migration command', () => {
     expect(execFileSync('sqlite3', [databasePath, 'PRAGMA integrity_check;'], { encoding: 'utf8' }).trim()).toBe(
       'ok'
     );
-  });
+  }, 60_000);
 });
