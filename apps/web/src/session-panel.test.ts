@@ -1,29 +1,8 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { SessionPanel } from './App';
-import type { Exercise, WorkoutTemplate } from './types';
-
-describe('SessionPanel source', () => {
-  it('does not keep a manual save action for the active workout', () => {
-    const source = readFileSync(resolve(__dirname, 'App.tsx'), 'utf8');
-
-    expect(source).not.toContain('Тренировка сохранена');
-    expect(source).not.toContain('onSave={() => saveSession()}');
-  });
-
-  it('renders accessible exercise disclosures and the completion indicator', () => {
-    const source = readFileSync(resolve(__dirname, 'App.tsx'), 'utf8');
-
-    expect(source).toContain('aria-expanded={isExpanded}');
-    expect(source).toContain('session-exercise-header');
-    expect(source).toContain('session-exercise-content');
-    expect(source).toContain('exercise-complete-indicator');
-    expect(source).toContain('isSessionExerciseComplete(exercise)');
-  });
-});
+import { SessionPanel } from './GymScreen';
+import type { Exercise, PlanSummary, WorkoutSession } from './types';
 
 describe('SessionPanel empty state', () => {
   const exercises: Exercise[] = [
@@ -34,17 +13,17 @@ describe('SessionPanel empty state', () => {
     { id: 'press', name: 'Жим стоя', muscleGroup: 'shoulders', equipment: 'Штанга', techniqueNote: null, isHidden: false }
   ];
 
-  const templates: WorkoutTemplate[] = [
+  const templates: PlanSummary[] = [
     {
       id: 'template-1',
       name: 'Верх тела',
-      notes: null,
+      updatedAt: '2026-01-01',
       exercises: [
-        { id: 'template-exercise-1', exerciseId: 'bench', exercise: exercises[0], order: 0, sets: [] },
-        { id: 'template-exercise-2', exerciseId: 'pullup', exercise: exercises[2], order: 1, sets: [] },
-        { id: 'template-exercise-3', exerciseId: 'squat', exercise: exercises[1], order: 2, sets: [] },
-        { id: 'template-exercise-4', exerciseId: 'row', exercise: exercises[3], order: 3, sets: [] },
-        { id: 'template-exercise-5', exerciseId: 'press', exercise: exercises[4], order: 4, sets: [] }
+        { id: 'template-exercise-1', name: exercises[0].name },
+        { id: 'template-exercise-2', name: exercises[2].name },
+        { id: 'template-exercise-3', name: exercises[1].name },
+        { id: 'template-exercise-4', name: exercises[3].name },
+        { id: 'template-exercise-5', name: exercises[4].name }
       ]
     }
   ];
@@ -90,4 +69,19 @@ describe('SessionPanel empty state', () => {
     expect(markup).toContain('Планов пока нет');
     expect(markup).toContain('Создать план');
   });
+});
+
+it('renders a completed set in an expanded exercise and offers both finish actions', () => {
+  const session: WorkoutSession = {
+    id: 'active', templateId: null, templateNameSnapshot: null, startedAt: '', completedAt: null, status: 'active',
+    exercises: [{ order: 0, exerciseId: 'press', sets: [{ type: 'working', order: 0, completed: true,
+      actualReps: 8, actualWeightKg: 50, plannedReps: 8, plannedWeightKg: 50 }] }]
+  };
+  const html = renderToStaticMarkup(createElement(SessionPanel, {
+    session, exercises: [], templates: [], setSession() {}, onStart() {}, onComplete() {}, onOpenTemplates() {}
+  }));
+  expect(html).toContain('aria-expanded="true"');
+  expect(html).toContain('Все подходы выполнены');
+  expect(html).toContain('Завершить и обновить план');
+  expect(html).not.toContain('Сохранить тренировку');
 });

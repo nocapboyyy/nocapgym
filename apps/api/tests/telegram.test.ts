@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { signInitData } from './helpers/signed-init-data.js';
 import { describe, expect, it } from 'vitest';
 import {
   ExpiredTelegramInitDataError,
@@ -9,16 +9,6 @@ import {
 
 const nowSeconds = 2_000_000_000;
 const validationOptions = { maxAgeSeconds: 86_400, clockSkewSeconds: 60, nowSeconds };
-
-function signInitData(params: Record<string, string>, botToken: string) {
-  const dataCheckString = Object.entries(params)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, value]) => `${key}=${value}`)
-    .join('\n');
-  const secret = createHmac('sha256', 'WebAppData').update(botToken).digest();
-  const hash = createHmac('sha256', secret).update(dataCheckString).digest('hex');
-  return new URLSearchParams({ ...params, hash }).toString();
-}
 
 describe('telegram auth', () => {
   it('validates signed init data and returns the Telegram user', () => {

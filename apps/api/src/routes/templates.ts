@@ -3,7 +3,7 @@ import { templatePayloadSchema } from '../schemas.js';
 import type { AppContext } from '../types.js';
 import { notFound } from '../errors.js';
 
-const templateInclude = {
+export const templateInclude = {
   exercises: {
     orderBy: { order: 'asc' as const },
     include: {
@@ -20,6 +20,20 @@ export async function registerTemplateRoutes(app: FastifyInstance, context: AppC
       orderBy: { updatedAt: 'desc' },
       include: templateInclude
     });
+  });
+
+  app.get('/api/templates/summary', async request => {
+    const plans = await context.prisma.workoutTemplate.findMany({
+      where: { userId: request.user!.id },
+      orderBy: { updatedAt: 'desc' },
+      select: {
+        id: true, name: true, updatedAt: true,
+        exercises: { orderBy: { order: 'asc' }, select: { id: true, exercise: { select: { name: true } } } }
+      }
+    });
+    return { items: plans.map(plan => ({
+      id: plan.id, name: plan.name, updatedAt: plan.updatedAt, exercises: plan.exercises.map(row => ({ id: row.id, name: row.exercise.name }))
+    })) };
   });
 
   app.get<{ Params: { id: string } }>('/api/templates/:id', async (request) => {

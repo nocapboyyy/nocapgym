@@ -1,7 +1,8 @@
+import { calendarRange } from './calendar-range';
 import type { WorkoutSession } from './types';
 import { toLocalDateKey } from './week-calendar';
 
-type HistoryItem = Pick<WorkoutSession, 'id' | 'startedAt' | 'status'>;
+type HistoryItem = Pick<WorkoutSession, 'id' | 'startedAt'> & { status?: WorkoutSession['status'] };
 
 export type MonthCalendarDay = {
   date: Date;
@@ -61,18 +62,12 @@ export function buildMonthCalendar(
   todayInput: Date,
   history: HistoryItem[]
 ): MonthCalendarDay[] {
-  const monthStart = new Date(displayedMonth.getFullYear(), displayedMonth.getMonth(), 1);
   const today = new Date(todayInput.getFullYear(), todayInput.getMonth(), todayInput.getDate());
-  const mondayOffset = (monthStart.getDay() + 6) % 7;
-  const gridStart = new Date(
-    monthStart.getFullYear(),
-    monthStart.getMonth(),
-    monthStart.getDate() - mondayOffset
-  );
+  const { start: gridStart } = calendarRange(displayedMonth, 'month');
   const completedWorkoutDates = new Set<string>();
 
   for (const session of history) {
-    if (session.status !== 'completed') {
+    if (session.status && session.status !== 'completed') {
       continue;
     }
 
@@ -95,7 +90,7 @@ export function buildMonthCalendar(
       weekdayLabel: WEEKDAY_LABELS[index % WEEKDAY_LABELS.length],
       accessibleLabel: hasWorkout ? `${accessibleDate}, есть тренировка` : accessibleDate,
       isToday: date.getTime() === today.getTime(),
-      isOutsideDisplayedMonth: date.getMonth() !== monthStart.getMonth(),
+      isOutsideDisplayedMonth: date.getMonth() !== displayedMonth.getMonth(),
       hasWorkout
     };
   });

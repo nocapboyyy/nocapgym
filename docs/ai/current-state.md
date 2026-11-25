@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-07-14
+Last updated: 2026-10-12
 
 ## Working Features
 
@@ -9,7 +9,7 @@ Last updated: 2026-07-14
   authorization asks the user to close and reopen the Mini App.
 - Explicit gender onboarding blocks the main app for new or existing users whose gender is still `null`.
 - Dev auth fallback for local browser testing.
-- User workout templates.
+- Plan cards and the gym picker load compact summaries. The plan editor loads sets on demand, and an active workout retains local set edits across tab switches.
 - Plan creation wizard with modal exercise picker and set editor.
 - In plan creation, adding a set copies the previous set's type, target weight, and target reps.
 - Plan exercises can be reopened from the wizard summary and edited in place.
@@ -21,7 +21,7 @@ Last updated: 2026-07-14
 - Empty actual workout fields remain `null`; incomplete sets may omit actual
   repetitions, while completed sets and template targets require positive
   integer repetitions with Russian validation feedback.
-- Completed workout history.
+- History loads on entry in pages of 20 with «Показать ещё». Calendar range and progress requests have independent retry controls.
 - History keeps the plan name captured when a workout starts, so later template renames or deletion do not rewrite old cards.
 - History starts with a compact six-week month calendar. Completed workout days use dot markers; horizontal swipes or arrow controls change months without filtering history.
 - History workout cards show the source plan name instead of a generic stats icon.
@@ -37,7 +37,7 @@ Last updated: 2026-07-14
 - The profile menu allows gender changes and provides admins a client/admin interface switch outside the primary navigation.
 - Admin exercise management with predefined muscle group selection.
 - Exercise hiding instead of hard delete as the preferred catalog flow.
-- Delete completed workout from history.
+- Completing or deleting a workout updates loaded history cards and calendar markers in place. The client keeps open history pages and refreshes the exercise filter when its options may have changed.
 
 ## Recent UI Work
 
@@ -68,9 +68,10 @@ Last updated: 2026-07-14
 ## Operational Notes
 
 - Production deployment is documented in `docs/ai/production-runbook.md` and
-  uses Node.js 22. The API is stopped before the checked SQLite backup and
-  `prisma migrate deploy`, then restarted only after migration and integrity
-  checks succeed.
+  uses Node.js 22. `scripts/deploy.sh [branch]` defaults to `main`, rejects
+  dirty/concurrent deployments, and stops the API before updating the shared
+  checkout and dependencies. It performs checks/build, verified SQLite backup,
+  migrations, restart, and health verification; failures leave the API stopped.
 - `npm run lint` checks API and web TypeScript, floating promises in production
   code, React Hooks, and JSX accessibility.
 - Build runs Prisma client generation before API TypeScript compilation.

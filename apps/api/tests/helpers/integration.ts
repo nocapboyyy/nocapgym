@@ -12,6 +12,7 @@ export const integrationAdminTelegramId = '9001';
 export type IntegrationTestHarness = Awaited<ReturnType<typeof createIntegrationTestHarness>>;
 
 export type IntegrationTestHarnessOptions = {
+  onQuery?: (sql: string) => void;
   beforeMigration?: (migrationName: string, prisma: PrismaClient) => Promise<void>;
 };
 
@@ -21,7 +22,12 @@ export async function createIntegrationTestHarness(options: IntegrationTestHarne
   let prisma: PrismaClient | undefined;
 
   try {
-    const client = new PrismaClient({ datasourceUrl: databaseUrl });
+    const { onQuery } = options;
+    const client = new PrismaClient({
+      datasourceUrl: databaseUrl,
+      log: onQuery ? [{ emit: 'event', level: 'query' }] : []
+    });
+    if (onQuery) client.$on('query', event => onQuery(event.query));
     prisma = client;
     await applyMigrations(client, options);
     const app = await buildServer({

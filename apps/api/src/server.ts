@@ -5,6 +5,7 @@ import { readConfig } from './config.js';
 import { prisma as defaultPrisma } from './db.js';
 import { registerAuth } from './auth/plugin.js';
 import { registerExerciseRoutes } from './routes/exercises.js';
+import { registerHistoryRoutes } from './routes/history.js';
 import { registerSessionRoutes } from './routes/sessions.js';
 import { registerTemplateRoutes } from './routes/templates.js';
 import { registerUserRoutes } from './routes/users.js';
@@ -34,6 +35,7 @@ export async function buildServer(overrides: Partial<AppContext> = {}) {
   await registerExerciseRoutes(app, context);
   await registerTemplateRoutes(app, context);
   await registerSessionRoutes(app, context);
+  await registerHistoryRoutes(app, context);
   await registerUserRoutes(app, context);
 
   app.setErrorHandler((error: unknown, request, reply) => {

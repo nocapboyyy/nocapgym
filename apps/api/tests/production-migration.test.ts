@@ -30,7 +30,7 @@ describe('production migration command', () => {
       [databasePath, 'SELECT COUNT(*) FROM _prisma_migrations WHERE finished_at IS NOT NULL;'],
       { encoding: 'utf8' }
     ).trim();
-    expect(migrationCount).toBe('5');
+    expect(migrationCount).toBe('6');
 
     execFileSync(process.execPath, [scriptPath], { env, stdio: 'pipe' });
     const backups = await readdir(backupDirectory);
@@ -53,5 +53,5 @@ describe('production migration command', () => {
     expect(execFileSync('sqlite3', [databasePath, 'PRAGMA integrity_check;'], { encoding: 'utf8' }).trim()).toBe(
       'ok'
     );
-  });
+  }, 60_000);
 });

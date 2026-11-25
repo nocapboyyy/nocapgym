@@ -1,3 +1,4 @@
+import { templateInclude } from './templates.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { buildUserExportPayload } from '../domain/backup.js';
@@ -18,6 +19,8 @@ const sessionInclude = {
 };
 
 export async function registerSessionRoutes(app: FastifyInstance, context: AppContext) {
+  const pendingStarts = new Map<string, Promise<void>>();
+
   app.get('/api/sessions/active', async (request) => {
     return context.prisma.workoutSession.findFirst({
       where: { userId: request.user!.id, status: 'active' },
@@ -37,6 +40,15 @@ export async function registerSessionRoutes(app: FastifyInstance, context: AppCo
       }
     });
     if (!template) throw notFound('План не найден');
+
+    // SQLite permits one writer. Queue overlapping starts for the same user
+    // before opening a transaction so both requests see committed session state.
+    const userId = request.user!.id;
+    const previousStart = pendingStarts.get(userId);
+    let release!: () => void;
+    const currentStart = new Promise<void>((resolve) => { release = resolve; });
+    pendingStarts.set(userId, currentStart);
+    await previousStart;
 
     try {
       const result = await context.prisma.$transaction(async (tx) => {
@@ -94,6 +106,9 @@ export async function registerSessionRoutes(app: FastifyInstance, context: AppCo
         if (concurrentSession) return concurrentSession;
       }
       throw error;
+    } finally {
+      release();
+      if (pendingStarts.get(userId) === currentStart) pendingStarts.delete(userId);
     }
   });
 
@@ -183,8 +198,9 @@ export async function registerSessionRoutes(app: FastifyInstance, context: AppCo
         if (!ownedTemplate) throw conflict('Исходный план тренировки недоступен');
 
         await tx.templateExercise.deleteMany({ where: { templateId: completed.templateId } });
-        await tx.workoutTemplate.update({
+        const updatedTemplate = await tx.workoutTemplate.update({
           where: { id: completed.templateId },
+          include: templateInclude,
           data: {
             exercises: {
               create: completed.exercises.map((exercise) => ({
@@ -202,6 +218,7 @@ export async function registerSessionRoutes(app: FastifyInstance, context: AppCo
             }
           }
         });
+        return { ...completed, updatedTemplate };
       }
 
       return completed;

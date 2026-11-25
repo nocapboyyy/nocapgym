@@ -1,6 +1,8 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
-import type { WorkoutSession } from './types';
+import { calendarPath } from './calendar-range';
+import { ReadStatus, useScreenData } from './screen-data';
+import type { CalendarMarker } from './types';
 import {
   buildMonthCalendar,
   formatMonthYear,
@@ -10,7 +12,7 @@ import {
 import { startLiveDayRefresh } from './week-calendar';
 
 type MonthCalendarProps = {
-  history: WorkoutSession[];
+  history?: CalendarMarker[];
   now?: Date;
 };
 
@@ -113,7 +115,8 @@ export function MonthCalendar({ history, now }: MonthCalendarProps) {
   };
 
   const label = formatMonthYear(displayedMonth);
-  const days = buildMonthCalendar(displayedMonth, current, history);
+  const markers = useScreenData<{ items: CalendarMarker[] }>(history ? undefined : calendarPath(displayedMonth, 'month'));
+  const days = buildMonthCalendar(displayedMonth, current, history ?? markers.data?.items ?? []);
 
   return (
     <section
@@ -153,6 +156,7 @@ export function MonthCalendar({ history, now }: MonthCalendarProps) {
           <span key={weekday}>{weekday}</span>
         ))}
       </div>
+      <ReadStatus resource={markers} label="отметки календаря" />
       <div className="month-calendar-days" role="list">
         {days.map((day) => {
           const className = [

@@ -1,10 +1,12 @@
 import { Dumbbell } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { WorkoutSession } from './types';
+import { calendarPath } from './calendar-range';
+import { ReadStatus, useScreenData } from './screen-data';
+import type { CalendarMarker } from './types';
 import { buildCurrentWeek, formatCurrentMonth, startLiveDayRefresh } from './week-calendar';
 
 type WeekCalendarProps = {
-  history: WorkoutSession[];
+  history?: CalendarMarker[];
   now?: Date;
 };
 
@@ -29,11 +31,13 @@ export function WeekCalendar({ history, now }: WeekCalendarProps) {
     });
   }, [now]);
 
-  const days = buildCurrentWeek(current, history);
+  const markers = useScreenData<{ items: CalendarMarker[] }>(history ? undefined : calendarPath(current, 'week'));
+  const days = buildCurrentWeek(current, history ?? markers.data?.items ?? []);
 
   return (
     <section className="week-calendar" aria-label="Текущая неделя">
       <h2>{formatCurrentMonth(current)}</h2>
+      <ReadStatus resource={markers} label="отметки календаря" />
       <div className="week-calendar-days" role="list">
         {days.map((day) => {
           const className = [
